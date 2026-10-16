@@ -43,7 +43,7 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
 | **Left Arrow** | Move left (continuous movement while held) |
 | **Right Arrow** | Move right (continuous movement while held) |
 | **Z** | Confirm / Start Game / Pause & Resume Toggle / Restart |
-| **Space** | Neon Surge Dash (2.2s cooldown, secondary dodge, safe action) |
+| **Space** | Neon Surge Dash (2.0s cooldown, secondary dodge, safe action) |
 
 - **Diagonals**: Holding two perpendicular arrows simultaneously moves and steers diagonally.
 - **Speedy Cyber Arrow Flight**: High-speed propulsion (`315 px/s` cruising, `772 px/s` dash burst) with sharpened steering response.
@@ -60,11 +60,12 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
    - **Current Position Hunters (`Scout Alpha` & `Viper Phantom`)**: Lock directly onto your current coordinates and curve inward in flanking arcs to flush you out.
    - **Predictive Intercept Hunters (`Hunter Omega` & `Titan Overlord`)**: Calculate your real-time heading and velocity vector to cut off your projected escape path ahead of time!
    - Together, they execute coordinated **Pincer Traps** designed to raise player heart rate!
-3. **Predictive AI Sector Lockdown (Square Hazard Trap)**:
+3. **Scaling Multi-Square Predictive AI Sector Lockdown**:
    - The AI continuously trains on your movement velocity, vector projection, and sector transition habits.
-   - It forecasts your next square and locks on with a flashing **1.25s advance telegraph** (`AI PREDICTION LOCK [1.2s]`).
-   - The square snaps shut into an electrified **`[!! HAZARD LOCKDOWN !!]`** for 3.2 seconds.
-   - Breaking free of the predicted square before it locks down awards **`PREDICTION EVADED! +300`**!
+   - **Scales with Score & Threat**: Locks down **1 square** initially, escalating to **2 squares** at 1,200 pts, **3 squares** at 2,800 pts, and up to **4 simultaneous hazard zones** at 4,500+ pts!
+   - Each square locks on with an animated **1.25s advance telegraph** (`AI SECTOR LOCK [1.2s]`).
+   - The squares snap shut into electrified **`[!! HAZARD LOCKDOWN !!]`** zones for 3.0 seconds.
+   - Breaking free of the predicted squares before they lock down awards **`PREDICTION EVADED! +300`** per square!
 4. **Curved Pursuit Flanking Arcs**:
    - Drones calculate **Quadratic Bezier Arcs** that flank around the arena with 1.25s telegraphs before striking.
 5. **Hunter Speed Dashes**:

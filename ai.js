@@ -1,5 +1,6 @@
-// ai.js — Deterministic Adaptive AI & Predictive Grid Lockdown System
+// ai.js — Deterministic Adaptive AI & Multi-Sector Predictive Grid Lockdown System
 // Samples player movement, tracks sector transition frequencies, and forecasts next-move squares.
+// Scales simultaneous hazard lockdown squares as score and threat levels climb (1 -> 4 squares).
 // Executes high-tension "Sector Lockdowns" with 1.25s advance telegraphs (Rule 3 compliant).
 
 class AdaptiveAI {
@@ -22,8 +23,8 @@ class AdaptiveAI {
     this.biasIntensity = 0;
     this.maxOffset = 64;
 
-    // AI Prediction & Sector Lockdown State
-    this.lockdown = null;
+    // AI Prediction & Multi-Sector Lockdown State
+    this.lockdowns = [];      // Array of active lockdown square objects
     this.lockdownTimer = 2.5; // Quick warmup before first prediction
     this.transitions = {};    // Markov transition table: 'col,row' -> { 'col,row': count }
     this.lastCellKey = null;
@@ -40,11 +41,11 @@ class AdaptiveAI {
     this.cellWidth = arenaWidth / cols;
     this.cellHeight = Math.max(10, (arenaHeight - topOffset) / rows);
 
-    if (this.lockdown) {
-      this.lockdown.x = this.lockdown.col * this.cellWidth;
-      this.lockdown.y = this.topOffset + this.lockdown.row * this.cellHeight;
-      this.lockdown.width = this.cellWidth;
-      this.lockdown.height = this.cellHeight;
+    for (const ld of this.lockdowns) {
+      ld.x = ld.col * this.cellWidth;
+      ld.y = this.topOffset + ld.row * this.cellHeight;
+      ld.width = this.cellWidth;
+      ld.height = this.cellHeight;
     }
   }
 
@@ -55,13 +56,13 @@ class AdaptiveAI {
     this.dominantRow = -1;
     this.dominantCenter = null;
     this.biasIntensity = 0;
-    this.lockdown = null;
+    this.lockdowns = [];
     this.lockdownTimer = 2.5;
     this.transitions = {};
     this.lastCellKey = null;
   }
 
-  update(dt, playerX, playerY, threatLevel = 1, playerAngle = 0) {
+  update(dt, playerX, playerY, threatLevel = 1, playerAngle = 0, score = 0) {
     // 1. Position sampling & habit analysis
     this.sampleTimer += dt;
     if (this.sampleTimer >= this.sampleInterval) {
@@ -76,41 +77,59 @@ class AdaptiveAI {
     this.prevPlayerX = playerX;
     this.prevPlayerY = playerY;
 
-    // 3. Update active Lockdown
-    if (this.lockdown) {
-      this.lockdown.timer += dt;
+    // 3. Update all active Lockdowns
+    let soundSlamTriggered = false;
 
-      if (this.lockdown.state === 'TELEGRAPH') {
-        if (this.isPlayerInSquare(playerX, playerY, this.lockdown)) {
-          this.lockdown.playerWasInsideDuringTelegraph = true;
+    for (let i = this.lockdowns.length - 1; i >= 0; i--) {
+      const ld = this.lockdowns[i];
+      ld.timer += dt;
+
+      if (ld.state === 'TELEGRAPH') {
+        if (this.isPlayerInSquare(playerX, playerY, ld)) {
+          ld.playerWasInsideDuringTelegraph = true;
         }
 
-        if (this.lockdown.timer >= this.lockdown.telegraphDuration) {
+        if (ld.timer >= ld.telegraphDuration) {
           // Snap shut into locked hazard state!
-          this.lockdown.state = 'LOCKED';
-          this.lockdown.timer = 0;
+          ld.state = 'LOCKED';
+          ld.timer = 0;
 
-          if (this.lockdown.playerWasInsideDuringTelegraph && !this.isPlayerInSquare(playerX, playerY, this.lockdown)) {
-            this.lockdown.evaded = true;
+          if (ld.playerWasInsideDuringTelegraph && !this.isPlayerInSquare(playerX, playerY, ld)) {
+            ld.evaded = true;
           }
 
-          if (window.sound) window.sound.playLockdownSlam();
+          if (!soundSlamTriggered && window.sound) {
+            window.sound.playLockdownSlam();
+            soundSlamTriggered = true;
+          }
         }
-      } else if (this.lockdown.state === 'LOCKED') {
-        if (this.lockdown.timer >= this.lockdown.activeDuration) {
-          this.lockdown = null;
-          this.lockdownTimer = 0;
+      } else if (ld.state === 'LOCKED') {
+        if (ld.timer >= ld.activeDuration) {
+          this.lockdowns.splice(i, 1);
         }
       }
-    } else {
-      // 4. Lockdown cycle timer (scales with threat level)
-      const cooldowns = [8.5, 7.8, 6.5, 5.5, 4.5, 3.8];
-      const targetCooldown = cooldowns[Math.min(5, Math.max(1, threatLevel))] || 6.0;
+    }
+
+    // 4. Lockdown cycle timer: initiate wave when all current squares have finished
+    if (this.lockdowns.length === 0) {
+      const cooldowns = [8.0, 7.2, 6.0, 5.0, 4.2, 3.6];
+      const targetCooldown = cooldowns[Math.min(5, Math.max(1, threatLevel))] || 5.5;
 
       this.lockdownTimer += dt;
       if (this.lockdownTimer >= targetCooldown) {
         this.lockdownTimer = 0;
-        this._initiatePredictedLockdown(playerX, playerY, vx, vy, playerAngle);
+
+        // Determine number of hazard lockdown squares based on score and threat level
+        let squareCount = 1;
+        if (score >= 4500 || threatLevel >= 5) {
+          squareCount = 4; // 4 simultaneous squares
+        } else if (score >= 2800 || threatLevel >= 4) {
+          squareCount = 3; // 3 simultaneous squares
+        } else if (score >= 1200 || threatLevel >= 2) {
+          squareCount = 2; // 2 simultaneous squares
+        }
+
+        this._initiatePredictedLockdowns(playerX, playerY, vx, vy, playerAngle, squareCount);
       }
     }
   }
@@ -171,24 +190,38 @@ class AdaptiveAI {
     }
   }
 
-  _initiatePredictedLockdown(playerX, playerY, vx, vy, playerAngle) {
+  _initiatePredictedLockdowns(playerX, playerY, vx, vy, playerAngle, count = 1) {
     const currentCol = Math.min(this.cols - 1, Math.max(0, Math.floor(playerX / this.cellWidth)));
     const currentRow = Math.min(this.rows - 1, Math.max(0, Math.floor((playerY - this.topOffset) / this.cellHeight)));
     const currentKey = `${currentCol},${currentRow}`;
 
-    let predCol = currentCol;
-    let predRow = currentRow;
+    const chosenCells = [];
+    const usedKeys = new Set();
+
+    const addCell = (c, r) => {
+      const clampedC = Math.min(this.cols - 1, Math.max(0, c));
+      const clampedR = Math.min(this.rows - 1, Math.max(0, r));
+      const key = `${clampedC},${clampedR}`;
+      if (!usedKeys.has(key)) {
+        usedKeys.add(key);
+        chosenCells.push({ col: clampedC, row: clampedR });
+        return true;
+      }
+      return false;
+    };
 
     const speed = Math.hypot(vx, vy);
 
+    // 1. Primary Square: Forward velocity forecast or Markov habit transition
+    let p1Col = currentCol;
+    let p1Row = currentRow;
+
     if (speed > 45) {
-      // 1. Moving player: project future destination 1.3 seconds ahead
-      const futureX = playerX + vx * 1.3;
-      const futureY = playerY + vy * 1.3;
-      predCol = Math.min(this.cols - 1, Math.max(0, Math.floor(futureX / this.cellWidth)));
-      predRow = Math.min(this.rows - 1, Math.max(0, Math.floor((futureY - this.topOffset) / this.cellHeight)));
+      const futureX = playerX + vx * 1.35;
+      const futureY = playerY + vy * 1.35;
+      p1Col = Math.min(this.cols - 1, Math.max(0, Math.floor(futureX / this.cellWidth)));
+      p1Row = Math.min(this.rows - 1, Math.max(0, Math.floor((futureY - this.topOffset) / this.cellHeight)));
     } else if (this.transitions[currentKey]) {
-      // 2. Slow / stopped player: use trained transition habits from this cell
       let bestNextKey = null;
       let bestCount = 0;
       for (const nextKey in this.transitions[currentKey]) {
@@ -199,40 +232,72 @@ class AdaptiveAI {
       }
       if (bestNextKey) {
         const [bc, br] = bestNextKey.split(',').map(Number);
-        predCol = bc;
-        predRow = br;
+        p1Col = bc;
+        p1Row = br;
       }
     } else {
-      // 3. Fallback: project forward along ship facing angle
       const forwardX = playerX + Math.cos(playerAngle) * this.cellWidth;
       const forwardY = playerY + Math.sin(playerAngle) * this.cellHeight;
-      predCol = Math.min(this.cols - 1, Math.max(0, Math.floor(forwardX / this.cellWidth)));
-      predRow = Math.min(this.rows - 1, Math.max(0, Math.floor((forwardY - this.topOffset) / this.cellHeight)));
+      p1Col = Math.min(this.cols - 1, Math.max(0, Math.floor(forwardX / this.cellWidth)));
+      p1Row = Math.min(this.rows - 1, Math.max(0, Math.floor((forwardY - this.topOffset) / this.cellHeight)));
+    }
+    addCell(p1Col, p1Row);
+
+    // 2. Square 2: Flanking intercept (cuts off perpendicular escape path)
+    if (count >= 2) {
+      if (Math.abs(vx) >= Math.abs(vy)) {
+        const dir = vy >= 0 ? 1 : -1;
+        if (!addCell(p1Col, p1Row + dir)) addCell(p1Col, p1Row - dir);
+      } else {
+        const dir = vx >= 0 ? 1 : -1;
+        if (!addCell(p1Col + dir, p1Row)) addCell(p1Col - dir, p1Row);
+      }
     }
 
-    const boxX = predCol * this.cellWidth;
-    const boxY = this.topOffset + predRow * this.cellHeight;
+    // 3. Square 3: Habit Denier (locks down player's favorite camping hotspot)
+    if (count >= 3) {
+      if (this.dominantCol >= 0) {
+        addCell(this.dominantCol, this.dominantRow);
+      } else {
+        if (!addCell(p1Col + 1, p1Row)) addCell(p1Col - 1, p1Row);
+      }
+    }
 
-    this.lockdown = {
-      col: predCol,
-      row: predRow,
-      x: boxX,
-      y: boxY,
-      width: this.cellWidth,
-      height: this.cellHeight,
-      state: 'TELEGRAPH', // Rule 3: 1.25s advance notice (>= 1.0s)
-      timer: 0,
-      telegraphDuration: 1.25,
-      activeDuration: 3.2,
-      playerWasInsideDuringTelegraph: this.isPlayerInSquare(playerX, playerY, {
+    // 4. Square 4: Sector Perimeter Intercept
+    if (count >= 4) {
+      const centerCol = Math.floor(this.cols / 2);
+      const centerRow = Math.floor(this.rows / 2);
+      if (!addCell(centerCol, centerRow)) {
+        if (!addCell(currentCol + 2, currentRow)) addCell(currentCol - 2, currentRow);
+      }
+    }
+
+    // Construct the active lockdown objects
+    for (const cell of chosenCells) {
+      const boxX = cell.col * this.cellWidth;
+      const boxY = this.topOffset + cell.row * this.cellHeight;
+
+      this.lockdowns.push({
+        col: cell.col,
+        row: cell.row,
         x: boxX,
         y: boxY,
         width: this.cellWidth,
-        height: this.cellHeight
-      }),
-      evaded: false,
-      rewardedEvade: false
-    };
+        height: this.cellHeight,
+        state: 'TELEGRAPH', // Rule 3: 1.25s advance notice (>= 1.0s)
+        timer: 0,
+        telegraphDuration: 1.25,
+        activeDuration: 3.0,
+        playerWasInsideDuringTelegraph: this.isPlayerInSquare(playerX, playerY, {
+          x: boxX,
+          y: boxY,
+          width: this.cellWidth,
+          height: this.cellHeight
+        }),
+        evaded: false,
+        rewardedEvade: false
+      });
+    }
 
     if (window.sound) window.sound.playLockdownWarning();
   }
