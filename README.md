@@ -32,22 +32,21 @@ Then visit `http://localhost:8000`.
 
 ---
 
-## Controls (Strictly Six Keys Only)
+## Controls
 
-In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using these six keyboard controls (No WASD, Escape, or extra keys):
-
-| Key | Action |
+| Key / Input | Action |
 |---|---|
-| **Up Arrow** | Move up (continuous movement while held) |
-| **Down Arrow** | Move down (continuous movement while held) |
-| **Left Arrow** | Move left (continuous movement while held) |
-| **Right Arrow** | Move right (continuous movement while held) |
+| **Up Arrow / W** | Move up (continuous movement while held) |
+| **Down Arrow / S** | Move down (continuous movement while held) |
+| **Left Arrow / A** | Move left (continuous movement while held) |
+| **Right Arrow / D** | Move right (continuous movement while held) |
 | **Z** | Confirm / Start Game / Pause & Resume Toggle / Restart |
-| **Space** | Neon Surge Dash (2.2s cooldown, secondary dodge, safe action) |
+| **Space / Left Click** | Neon Surge Dash (2.2s cooldown, secondary dodge) |
 
-- **Diagonals**: Holding two perpendicular arrows simultaneously moves and steers diagonally.
+- **Diagonals**: Holding two perpendicular directions simultaneously (e.g. `W + A` or `Up + Left`) moves and steers diagonally.
 - **Player Arrow**: An aerodynamic delta-wing cyber arrow with animated dual thruster plumes that rotates smoothly toward your movement heading.
 - **Pause & Resume**: Pressing **`Z`** during active gameplay pauses the game safely; pressing **`Z`** again resumes play. The game also automatically pauses if the browser window loses focus (`blur`).
+- **Higher Difficulty Post-Hit Cooldown**: Post-hit invulnerability recovery cooldown is tuned to 1.0s, demanding immediate evasive maneuvering when cornered by hunting drones.
 
 ---
 
