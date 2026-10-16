@@ -32,3 +32,146 @@ canvas {
   display: block;
   outline: none;
 }
+
+/* In-Browser AI Vision Webcam PIP Window */
+#webcam-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 250px;
+  background: rgba(6, 12, 24, 0.90);
+  border: 2px solid #00f0ff;
+  border-radius: 10px;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.45), inset 0 0 10px rgba(0, 240, 255, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  backdrop-filter: blur(8px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#webcam-container.minimized {
+  height: 38px;
+  width: 220px;
+}
+
+#webcam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 240, 255, 0.12);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.8px;
+  color: #00f0ff;
+  user-select: none;
+}
+
+#webcam-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #00ff88;
+  box-shadow: 0 0 8px #00ff88;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+#webcam-toggle-btn {
+  background: transparent;
+  border: 1px solid rgba(0, 240, 255, 0.6);
+  color: #00f0ff;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.2s;
+}
+
+#webcam-toggle-btn:hover {
+  background: rgba(0, 240, 255, 0.25);
+}
+
+#webcam-video-wrap {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #02050c;
+  overflow: hidden;
+}
+
+#webcam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* Mirror camera for intuitive navigation */
+}
+
+#webcam-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#webcam-hud-notice {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #00f0ff;
+  background: rgba(4, 8, 16, 0.85);
+  padding: 10px;
+}
+
+#webcam-footer {
+  padding: 6px 10px;
+  background: rgba(4, 8, 16, 0.95);
+  border-top: 1px solid rgba(0, 240, 255, 0.25);
+  font-size: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  user-select: none;
+}
+
+#webcam-metrics {
+  display: flex;
+  justify-content: space-between;
+  color: #00f0ff;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+}
+
+#webcam-steer-indicators {
+  display: flex;
+  justify-content: space-around;
+  font-size: 11px;
+  font-weight: bold;
+  color: #4a5568;
+  padding-top: 2px;
+}
+
+.steer-arrow {
+  transition: color 0.15s, text-shadow 0.15s;
+}
+
+.steer-arrow.active {
+  color: #00ff88;
+  text-shadow: 0 0 10px #00ff88;
+}
+
