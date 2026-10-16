@@ -85,20 +85,22 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
 
 ---
 
-## Optional: AI Vision Gesture Controller (Hands-Free Play) 🖐️
+## Surprise Demo Mode: Play with your FACE 👀
 
-For demonstrations or hands-free gameplay, a standalone **AI Vision Gesture Bridge** is included (`gesture_controller.py`). It uses your webcam to detect hand gestures and converts them into hardware keyboard events, preserving **100% compliance with AGENTS.md rules**:
+At the demo, the game maps face gestures directly to the 6 competition actions:
 
-### How to Run the Gesture Controller
-1. Double-click `start_gesture_control.bat` (or run `python gesture_controller.py`).
-2. Focus the game in your browser window.
-3. Use the following hand gestures in front of your webcam:
+| Face Gesture | Emulated Key | Action in Game | Holding Gesture Behavior |
+|---|---|---|---|
+| **Head Up** | `ArrowUp` | Fly Up | Continuously flies up while head is up |
+| **Head Down** | `ArrowDown` | Fly Down | Continuously flies down while head is down |
+| **Turn Left** | `ArrowLeft` | Fly Left | Continuously flies left while turned left |
+| **Turn Right** | `ArrowRight` | Fly Right | Continuously flies right while turned right |
+| **Open Mouth** | `Z` | Start / Confirm / Resume / Restart | Holds Z while mouth is open (fresh trigger on open) |
+| **Blink** | `Space` | Neon Surge Dash (2.0s cooldown) | Holds Space while closed (triggers burst dash) |
 
-| Gesture | Emulated Key | Action in Game |
-|---|---|---|
-| **Shift Hand Outside Deadzone** | `Arrow Keys` | Continuous directional steering (diagonals supported) |
-| **Hand Inside Center Box** | *None* | Neutral deadzone / safe drift |
-| **Mouth Open (or Fist / Pinch)** | `Z` | Start / Confirm / Resume / Restart |
-| **Eye Blink (or Spread Palm)** | `Space` | Neon Surge Dash (2.0s cooldown) |
+### Two Ways to Play:
+1. **Directly in Browser**: Open `index.html` in Chrome or Edge, click **Allow** on the built-in webcam PIP window, and play hands-free!
+2. **Listener Script**: Double-click `start_gesture_control.bat` (or run `python gesture_controller.py`) and keep the game window in focus during the demo.
 
-*Press `q` or `Esc` in the camera window to safely quit the gesture bridge.*
+*Keyboard controls (Arrow Keys, Z, Space) also remain fully supported as hardware fallbacks.*
+

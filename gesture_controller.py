@@ -158,13 +158,42 @@ class GestureBridge:
                 mar = 0.0
                 ear = 0.30
                 face_detected = False
+                target_keys = {'up': False, 'down': False, 'left': False, 'right': False}
 
                 if face_results.multi_face_landmarks:
                     face_detected = True
                     flm = face_results.multi_face_landmarks[0].landmark
 
-                    # ---------------- Mouth Aspect Ratio (MAR) ----------------
-                    # Landmarks: Upper Lip: 13, Lower Lip: 14, Left Corner: 61, Right Corner: 291
+                    # ---------------- Head Steering (Pitch & Yaw) ----------------
+                    # Nose tip: 1, Left cheek: 234, Right cheek: 454, Eye center: 168, Chin: 152
+                    nose_x = 1.0 - flm[1].x  # Mirrored
+                    nose_y = flm[1].y
+
+                    # Yaw: Turn Left / Turn Right
+                    d_left = abs(flm[1].x - flm[234].x)
+                    d_right = abs(flm[1].x - flm[454].x)
+                    yaw_ratio = (d_left - d_right) / max(0.001, d_left + d_right)
+
+                    turn_left = (yaw_ratio < -0.16) or (nose_x < self.dz_x_min)
+                    turn_right = (yaw_ratio > 0.16) or (nose_x > self.dz_x_max)
+
+                    # Pitch: Head Up / Head Down
+                    eye_y = flm[168].y
+                    chin_y = flm[152].y
+                    nose_rel_y = (flm[1].y - eye_y) / max(0.001, chin_y - eye_y)
+
+                    head_up = (nose_rel_y < 0.36) or (nose_y < self.dz_y_min)
+                    head_down = (nose_rel_y > 0.64) or (nose_y > self.dz_y_max)
+
+                    target_keys['up'] = head_up
+                    target_keys['down'] = head_down
+                    target_keys['left'] = turn_left
+                    target_keys['right'] = turn_right
+
+                    # Draw Head Cursor
+                    cv2.circle(frame, (int(nose_x * w), int(nose_y * h)), 8, (0, 255, 255), -1)
+
+                    # ---------------- Mouth Aspect Ratio (MAR) -> Z Key ----------------
                     lip_top = flm[13]
                     lip_bottom = flm[14]
                     mouth_left = flm[61]
@@ -175,12 +204,12 @@ class GestureBridge:
                     mar = lip_dist / max(0.001, mouth_width)
 
                     # Draw Mouth Indicator Dots
-                    cv2.circle(frame, (int(lip_top.x * w), int(lip_top.y * h)), 3, (0, 255, 255), -1)
-                    cv2.circle(frame, (int(lip_bottom.x * w), int(lip_bottom.y * h)), 3, (0, 255, 255), -1)
+                    cv2.circle(frame, (int((1.0 - lip_top.x) * w), int(lip_top.y * h)), 3, (0, 255, 255), -1)
+                    cv2.circle(frame, (int((1.0 - lip_bottom.x) * w), int(lip_bottom.y * h)), 3, (0, 255, 255), -1)
 
                     is_mouth_open = (mar >= self.mouth_open_threshold)
 
-                    # Trigger Z when mouth opens
+                    # Holding mouth open holds Z
                     if is_mouth_open:
                         if not self.prev_mouth_open and (now - self.last_z_time) >= self.z_debounce:
                             self._press_key('z')
@@ -188,45 +217,40 @@ class GestureBridge:
                             action_text = ">> MOUTH OPEN -> Z KEY TRIGGERED! <<"
                             action_color = (0, 255, 0)
                         else:
-                            action_text = "MOUTH OPEN [Z]"
+                            action_text = "MOUTH OPEN [Z HELD]"
                             action_color = (0, 255, 128)
+                        self._set_held_state('z', True)
+                    else:
+                        self._set_held_state('z', False)
                     self.prev_mouth_open = is_mouth_open
 
-                    # ---------------- Eye Aspect Ratio (EAR) ----------------
-                    # Left Eye: Top: 159, Bottom: 145, Outer: 33, Inner: 133
+                    # ---------------- Eye Aspect Ratio (EAR) -> Space Dash ----------------
                     ear_left = math.hypot(flm[159].x - flm[145].x, flm[159].y - flm[145].y) / max(0.001, math.hypot(flm[33].x - flm[133].x, flm[33].y - flm[133].y))
-
-                    # Right Eye: Top: 386, Bottom: 374, Inner: 362, Outer: 263
                     ear_right = math.hypot(flm[386].x - flm[374].x, flm[386].y - flm[374].y) / max(0.001, math.hypot(flm[362].x - flm[263].x, flm[362].y - flm[263].y))
-
                     ear = (ear_left + ear_right) / 2.0
 
-                    # Draw Eye Indicator Dots
-                    cv2.circle(frame, (int(flm[159].x * w), int(flm[159].y * h)), 3, (255, 0, 255), -1)
-                    cv2.circle(frame, (int(flm[145].x * w), int(flm[145].y * h)), 3, (255, 0, 255), -1)
-                    cv2.circle(frame, (int(flm[386].x * w), int(flm[386].y * h)), 3, (255, 0, 255), -1)
-                    cv2.circle(frame, (int(flm[374].x * w), int(flm[374].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int((1.0 - flm[159].x) * w), int(flm[159].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int((1.0 - flm[145].x) * w), int(flm[145].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int((1.0 - flm[386].x) * w), int(flm[386].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int((1.0 - flm[374].x) * w), int(flm[374].y * h)), 3, (255, 0, 255), -1)
 
                     dash_remaining = max(0.0, self.dash_cooldown - (now - self.last_dash_time))
+                    eyes_closed = (ear < self.blink_threshold)
 
-                    # Blink Detection: Eyes close below threshold, then reopen
-                    if ear < self.blink_threshold:
+                    # Holding blink holds Space
+                    if eyes_closed:
                         if not self.is_eye_closed:
                             self.is_eye_closed = True
                             self.eye_closed_start = now
+                            if dash_remaining <= 0.0:
+                                self._press_key('space')
+                                self.last_dash_time = now
+                                action_text = ">> EYE BLINK -> SPACE DASH TRIGGERED! <<"
+                                action_color = (0, 255, 255)
+                        self._set_held_state('space', True)
                     else:
                         if self.is_eye_closed:
-                            closure_duration = now - self.eye_closed_start
-                            # Intentional deliberate blink (between 0.08s and 0.70s)
-                            if 0.08 <= closure_duration <= 0.70:
-                                if dash_remaining <= 0.0:
-                                    self._press_key('space')
-                                    self.last_dash_time = now
-                                    action_text = ">> EYE BLINK -> SPACE DASH TRIGGERED! <<"
-                                    action_color = (0, 255, 255)
-                                else:
-                                    action_text = f"BLINK (DASH COOLDOWN [{dash_remaining:.1f}s])"
-                                    action_color = (0, 165, 255)
+                            self._set_held_state('space', False)
                             self.is_eye_closed = False
 
                 # ================= 2. HAND TRACKING FOR STEERING =================
@@ -319,14 +343,14 @@ class GestureBridge:
                             action_text = f"STEERING: {' + '.join(active_dirs)}"
                             action_color = (255, 200, 0)
 
-                # Update held arrow keys based on detected directions
-                if hand_detected:
+                # Update held arrow keys based on detected directions (from Head Steering or Hand)
+                if face_detected or hand_detected:
                     for key_name, should_hold in target_keys.items():
                         self._set_held_state(key_name, should_hold)
                 else:
                     self.release_all_keys()
                     if action_text == "NEUTRAL":
-                        action_text = "SHOW HAND TO STEER"
+                        action_text = "ALIGN FACE IN VIEW TO STEER"
                         action_color = (130, 130, 220)
 
                 # ================= HUD RENDERING =================

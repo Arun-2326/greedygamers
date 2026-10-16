@@ -59,26 +59,34 @@ class InputManager {
     this.webcamHeld.right = right;
   }
 
-  triggerWebcamZ() {
-    if (!this.held.z) {
+  setWebcamZ(isHeld) {
+    if (isHeld && !this.webcamHeld.z) {
       this.justPressedZ = true;
     }
-    this.webcamHeld.z = true;
+    this.webcamHeld.z = isHeld;
+  }
+
+  setWebcamSpace(isHeld) {
+    if (isHeld && !this.webcamHeld.space) {
+      this.justPressedSpace = true;
+    }
+    this.webcamHeld.space = isHeld;
+  }
+
+  triggerWebcamZ() {
+    this.setWebcamZ(true);
   }
 
   releaseWebcamZ() {
-    this.webcamHeld.z = false;
+    this.setWebcamZ(false);
   }
 
   triggerWebcamSpace() {
-    if (!this.held.space) {
-      this.justPressedSpace = true;
-    }
-    this.webcamHeld.space = true;
+    this.setWebcamSpace(true);
   }
 
   releaseWebcamSpace() {
-    this.webcamHeld.space = false;
+    this.setWebcamSpace(false);
   }
 
   _bindEvents() {

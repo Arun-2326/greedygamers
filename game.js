@@ -1608,11 +1608,11 @@ class Game {
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffea00';
     ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('Press Z to resume', this.width / 2, cy - 25);
+    ctx.fillText('Open Mouth or Press Z to resume', this.width / 2, cy - 25);
 
     // Box with controls reminder
-    const bw = Math.min(520, this.width - 60);
-    const bh = 140;
+    const bw = Math.min(560, this.width - 60);
+    const bh = 145;
     const bx = (this.width - bw) / 2;
     const by = cy + 20;
 
@@ -1623,11 +1623,11 @@ class Game {
     ctx.strokeRect(bx, by, bw, bh);
 
     ctx.textAlign = 'left';
-    ctx.font = '17px "Segoe UI", Arial, sans-serif';
+    ctx.font = '16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('• Arrow Keys : Directional Movement', bx + 30, by + 35);
-    ctx.fillText('• Z Key : Resume Gameplay', bx + 30, by + 70);
-    ctx.fillText('• Space : Neon Surge Dash (2.0s cooldown)', bx + 30, by + 105);
+    ctx.fillText('• Head Up / Down / Turn Left / Right : Steering (Held)', bx + 30, by + 35);
+    ctx.fillText('• Open Mouth (or Z) : Resume Gameplay', bx + 30, by + 72);
+    ctx.fillText('• Blink Eyes (or Space) : Neon Surge Dash (2.0s cooldown)', bx + 30, by + 109);
 
     ctx.restore();
   }
@@ -1689,39 +1689,39 @@ class Game {
     ctx.textAlign = 'left';
     ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('COMPETITION CONTROLS (STRICT SIX KEYS ONLY):', boxX + 28, boxY + 36);
+    ctx.fillText('DEMO CONTROLS: PLAY WITH YOUR FACE 👀 (OR SIX KEYS):', boxX + 28, boxY + 36);
 
-    // Visual Keycap Cluster 1: ARROW KEYS
-    this._drawKeycap(ctx, boxX + 28, boxY + 58, 120, 34, '▲ ▼ ◀ ▶', '#00f0ff');
+    // Visual Keycap Cluster 1: HEAD GESTURES / ARROWS
+    this._drawKeycap(ctx, boxX + 28, boxY + 58, 120, 34, 'HEAD STEER', '#00f0ff');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Continuous Directional Movement (Held + Diagonals)', boxX + 160, boxY + 80);
+    ctx.fillText('Head Up / Down / Turn Left / Turn Right (Held continuously)', boxX + 160, boxY + 80);
 
-    // Visual Keycap Cluster 2: Z KEY
-    this._drawKeycap(ctx, boxX + 28, boxY + 104, 120, 34, 'Z KEY', '#00ffcc');
+    // Visual Keycap Cluster 2: OPEN MOUTH / Z KEY
+    this._drawKeycap(ctx, boxX + 28, boxY + 104, 120, 34, 'OPEN MOUTH', '#00ffcc');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Confirm / Start Game / Pause / Resume / Restart', boxX + 160, boxY + 126);
+    ctx.fillText('Open Mouth (Confirm / Start Game / Pause / Resume / Restart)', boxX + 160, boxY + 126);
 
-    // Visual Keycap Cluster 3: SPACE KEY
-    this._drawKeycap(ctx, boxX + 28, boxY + 150, 120, 34, 'SPACE', '#ffea00');
+    // Visual Keycap Cluster 3: BLINK / SPACE KEY
+    this._drawKeycap(ctx, boxX + 28, boxY + 150, 120, 34, 'BLINK EYES', '#ffea00');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Neon Surge Dash (2.0s cooldown, secondary dodge)', boxX + 160, boxY + 172);
+    ctx.fillText('Blink Eyes (Neon Surge Dash, 2.0s cooldown)', boxX + 160, boxY + 172);
 
     // Feature note
     ctx.font = '14px "Courier New", monospace';
     ctx.fillStyle = '#94a3b8';
-    ctx.fillText('★ ENDLESS SURVIVAL ★ Predictive Sector Lockdown ★ 4 Seeker Drone Classes', boxX + 28, boxY + 215);
+    ctx.fillText('★ HOLD GESTURE TO HOLD KEY ★ Live Face Tracking on Built-in Webcam', boxX + 28, boxY + 215);
 
-    // Blinking "Press Z to start" (Rule 4 requirement)
+    // Blinking prompt
     if (Math.floor(performance.now() / 500) % 2 === 0) {
       ctx.textAlign = 'center';
       ctx.font = 'bold 34px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffea00';
       ctx.shadowColor = '#ffea00';
       ctx.shadowBlur = 18;
-      ctx.fillText('Press Z to start', this.width / 2, centerY + 225);
+      ctx.fillText('Open Mouth or Press Z to start', this.width / 2, centerY + 225);
     }
     ctx.restore();
   }
@@ -1811,7 +1811,7 @@ class Game {
         ctx.fillStyle = '#ffea00';
         ctx.shadowColor = '#ffea00';
         ctx.shadowBlur = 18;
-        ctx.fillText('Press Z to play again', this.width / 2, centerY + 185);
+        ctx.fillText('Open Mouth or Press Z to play again', this.width / 2, centerY + 185);
       }
     }
     ctx.restore();

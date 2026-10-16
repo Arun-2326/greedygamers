@@ -186,24 +186,39 @@
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const flm = results.multiFaceLandmarks[0];
 
-        // 1. Nose Tip Tracking (Landmark 1) for Steering
-        // Since video element is mirrored via CSS (scaleX(-1)), mirror landmark X for alignment
+        // 1. Head Steering: Head Up/Down (Pitch) and Turn Left/Right (Yaw)
+        // Nose tip: Landmark 1; Left cheek: Landmark 234; Right cheek: Landmark 454; Eye line: 168; Chin: 152
         const rawNoseX = flm[1].x;
-        const noseX = 1.0 - rawNoseX;
+        const noseX = 1.0 - rawNoseX; // Mirrored
         const noseY = flm[1].y;
 
         const nx = noseX * w;
         const ny = noseY * h;
 
-        // Steering directions
-        const up = noseY < this.dzYMin;
-        const down = noseY > this.dzYMax;
-        const left = noseX < this.dzXMin;
-        const right = noseX > this.dzXMax;
+        // Yaw calculation: Turn Left / Turn Right
+        const dLeft = Math.abs(flm[1].x - flm[234].x);
+        const dRight = Math.abs(flm[1].x - flm[454].x);
+        const yawRatio = (dLeft - dRight) / Math.max(0.001, dLeft + dRight);
 
+        // Turn left: yawRatio < -0.16 OR nose moved left
+        // Turn right: yawRatio > 0.16 OR nose moved right
+        const left = (yawRatio < -0.16) || (noseX < this.dzXMin);
+        const right = (yawRatio > 0.16) || (noseX > this.dzXMax);
+
+        // Pitch calculation: Head Up / Head Down
+        const eyeY = flm[168].y;
+        const chinY = flm[152].y;
+        const noseRelY = (flm[1].y - eyeY) / Math.max(0.001, chinY - eyeY);
+
+        // Head up: nose closer to eyes (< 0.36) OR nose moved up
+        // Head down: nose farther from eyes (> 0.64) OR nose moved down
+        const up = (noseRelY < 0.36) || (noseY < this.dzYMin);
+        const down = (noseRelY > 0.64) || (noseY > this.dzYMax);
+
+        // Holding a gesture holds the arrow key continuously
         this._updateSteering(up, down, left, right);
 
-        // 2. Mouth Aspect Ratio (MAR) -> Z Key
+        // 2. Open mouth -> Z (holding mouth open holds Z)
         // Landmarks: 13 (upper inner lip), 14 (lower inner lip), 61 (left corner), 291 (right corner)
         const lipDist = Math.hypot(flm[13].x - flm[14].x, flm[13].y - flm[14].y);
         const mouthWidth = Math.hypot(flm[61].x - flm[291].x, flm[61].y - flm[291].y);
@@ -213,17 +228,19 @@
         if (mouthIsOpen) {
           if (!this.isMouthOpen && (now - this.lastZTime) >= this.zDebounce) {
             this.lastZTime = now;
-            if (window.input) window.input.triggerWebcamZ();
+            if (window.input) window.input.setWebcamZ(true);
             this._flashMouthFeedback();
+          } else {
+            if (window.input) window.input.setWebcamZ(true);
           }
         } else {
           if (this.isMouthOpen) {
-            if (window.input) window.input.releaseWebcamZ();
+            if (window.input) window.input.setWebcamZ(false);
           }
         }
         this.isMouthOpen = mouthIsOpen;
 
-        // 3. Eye Aspect Ratio (EAR) -> Space Dash
+        // 3. Blink -> Space (holding blink holds Space, fresh press triggers dash)
         // Left eye: 159, 145, 33, 133; Right eye: 386, 374, 362, 263
         const earLeft = Math.hypot(flm[159].x - flm[145].x, flm[159].y - flm[145].y) /
                         Math.max(0.001, Math.hypot(flm[33].x - flm[133].x, flm[33].y - flm[133].y));
@@ -232,26 +249,23 @@
         this.ear = (earLeft + earRight) / 2.0;
 
         const dashRemaining = Math.max(0, (this.dashCooldown - (now - this.lastDashTime)) / 1000);
+        const eyesAreClosed = this.ear < this.blinkThreshold;
 
-        if (this.ear < this.blinkThreshold) {
+        if (eyesAreClosed) {
           if (!this.isEyeClosed) {
             this.isEyeClosed = true;
             this.eyeClosedStart = now;
+            if (dashRemaining <= 0) {
+              this.lastDashTime = now;
+              if (window.input) window.input.setWebcamSpace(true);
+              this._flashBlinkFeedback();
+            }
+          } else {
+            if (window.input) window.input.setWebcamSpace(true);
           }
         } else {
           if (this.isEyeClosed) {
-            const closureDuration = now - this.eyeClosedStart;
-            // Intentional blink: 70ms to 650ms
-            if (closureDuration >= 70 && closureDuration <= 650) {
-              if (dashRemaining <= 0) {
-                this.lastDashTime = now;
-                if (window.input) {
-                  window.input.triggerWebcamSpace();
-                  setTimeout(() => { if (window.input) window.input.releaseWebcamSpace(); }, 120);
-                }
-                this._flashBlinkFeedback();
-              }
-            }
+            if (window.input) window.input.setWebcamSpace(false);
             this.isEyeClosed = false;
           }
         }
@@ -260,6 +274,10 @@
         this._drawOverlayHUD(nx, ny, w, h);
       } else {
         this._updateSteering(false, false, false, false);
+        if (window.input) {
+          window.input.setWebcamZ(false);
+          window.input.setWebcamSpace(false);
+        }
       }
 
       this._updateMetricsDisplay();
