@@ -1,19 +1,21 @@
 """
-gesture_controller.py — AI Vision Gesture Controller Bridge for Neon Core: AI Arena
-Translates real-time webcam hand gestures into standard keyboard events (ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Z, Space).
+gesture_controller.py — AI Vision Face & Hand Gesture Controller Bridge for Neon Core: AI Arena
+Translates real-time webcam facial expressions and hand steering into standard keyboard events (Arrows, Z, Space).
 Maintains 100% compliance with AGENTS.md competition rules by emulating native hardware keys.
 
 Controls:
-- Move Hand from Center:
+- Hand Steering (Move outside center box):
     - Up    -> ArrowUp
     - Down  -> ArrowDown
     - Left  -> ArrowLeft
     - Right -> ArrowRight
-- Closed Fist / Pinch:
-    - Fire Z (Start, Confirm, Pause, Resume, Restart)
-- Open Spread Palm:
-    - Fire Space (Neon Surge Dash, 2.0s cooldown)
-- Exit: Press 'q' or 'Esc' in the camera window
+- Facial Expressions:
+    - MOUTH OPEN -> Press Z (Start, Confirm, Pause, Resume, Restart)
+    - EYE BLINK  -> Press Space (Neon Surge Dash, 2.0s cooldown)
+- Hand Gesture Backups:
+    - Fist / Pinch -> Z
+    - Spread Palm  -> Space
+- Exit: Press 'q' or 'Esc' in camera window
 """
 
 import cv2
@@ -36,14 +38,25 @@ pyautogui.FAILSAFE = False
 class GestureBridge:
     def __init__(self):
         self.mp_hands = mp.solutions.hands
+        self.mp_face = mp.solutions.face_mesh
         self.mp_draw = mp.solutions.drawing_utils
+
+        # Initialize Hand Tracking
         self.hands = self.mp_hands.Hands(
             max_num_hands=1,
             min_detection_confidence=0.65,
             min_tracking_confidence=0.60
         )
 
-        # Held key tracker
+        # Initialize Face Mesh for Mouth & Blink Tracking
+        self.face_mesh = self.mp_face.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.65,
+            min_tracking_confidence=0.60
+        )
+
+        # Held arrow keys tracker
         self.held = {
             'up': False,
             'down': False,
@@ -51,16 +64,25 @@ class GestureBridge:
             'right': False
         }
 
-        # Gesture trigger state trackers
-        self.prev_fist_state = False
+        # Facial Expression Trackers
+        # Mouth Open (Z Key)
+        self.mouth_open_threshold = 0.38
+        self.prev_mouth_open = False
         self.last_z_time = 0.0
-        self.z_debounce = 0.40  # Seconds between allowed Z triggers
+        self.z_debounce = 0.45  # Cooldown between Z triggers
 
-        self.prev_dash_state = False
+        # Eye Blink (Space Dash)
+        self.blink_threshold = 0.20
+        self.is_eye_closed = False
+        self.eye_closed_start = 0.0
         self.last_dash_time = 0.0
-        self.dash_cooldown = 2.0  # Seconds between dashes (matching Rule 1 & 2)
+        self.dash_cooldown = 2.0  # Rule 1: Dash cooldown >= 2.0s
 
-        # Deadzone configuration (normalized 0.0 - 1.0)
+        # Hand Gesture Backups
+        self.prev_fist_state = False
+        self.prev_dash_state = False
+
+        # Deadzone configuration for Hand Steering (normalized 0.0 - 1.0)
         self.dz_x_min = 0.38
         self.dz_x_max = 0.62
         self.dz_y_min = 0.38
@@ -104,14 +126,15 @@ class GestureBridge:
             print("Please ensure your webcam is connected and accessible.\n")
             return
 
-        print("\n" + "=" * 65)
-        print("  NEON CORE — AI VISION GESTURE CONTROLLER BRIDGE")
-        print("=" * 65)
-        print(" [▲/▼/◀/▶] Move hand outside center box to fly in that direction")
-        print(" [Z KEY]    Close hand into a Fist or Pinch to start / restart")
-        print(" [SPACE]    Spread all fingers wide for Neon Surge Dash")
+        print("\n" + "=" * 70)
+        print("  NEON CORE — AI VISION MULTI-GESTURE CONTROLLER BRIDGE")
+        print("=" * 70)
+        print(" [▲/▼/◀/▶] Move hand outside center box to steer in that direction")
+        print(" [Z KEY]    OPEN MOUTH -> Start Game / Confirm / Resume / Restart")
+        print(" [SPACE]    BLINK EYES -> Neon Surge Dash (2.0s cooldown)")
+        print(" [BACKUPS]  Closed Fist = Z  |  Spread Palm = Space Dash")
         print(" [EXIT]     Press 'q' or 'Esc' in camera window to quit")
-        print("=" * 65)
+        print("=" * 70)
         print(">> Focus the Neon Core game window in your browser to begin!\n")
 
         try:
@@ -124,28 +147,101 @@ class GestureBridge:
                 # Mirror frame horizontally for intuitive direct-mirror movement
                 frame = cv2.flip(frame, 1)
                 h, w, _ = frame.shape
-
-                # Convert BGR to RGB for MediaPipe processing
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = self.hands.process(rgb)
-
-                hand_detected = False
-                target_keys = {'up': False, 'down': False, 'left': False, 'right': False}
-                action_text = "NEUTRAL (HOLDING POSITION)"
-                action_color = (180, 180, 180)
 
                 now = time.time()
+                action_text = "NEUTRAL"
+                action_color = (180, 180, 180)
 
-                if results.multi_hand_landmarks:
+                # ================= 1. FACE MESH PROCESSING =================
+                face_results = self.face_mesh.process(rgb)
+                mar = 0.0
+                ear = 0.30
+                face_detected = False
+
+                if face_results.multi_face_landmarks:
+                    face_detected = True
+                    flm = face_results.multi_face_landmarks[0].landmark
+
+                    # ---------------- Mouth Aspect Ratio (MAR) ----------------
+                    # Landmarks: Upper Lip: 13, Lower Lip: 14, Left Corner: 61, Right Corner: 291
+                    lip_top = flm[13]
+                    lip_bottom = flm[14]
+                    mouth_left = flm[61]
+                    mouth_right = flm[291]
+
+                    lip_dist = math.hypot(lip_top.x - lip_bottom.x, lip_top.y - lip_bottom.y)
+                    mouth_width = math.hypot(mouth_left.x - mouth_right.x, mouth_left.y - mouth_right.y)
+                    mar = lip_dist / max(0.001, mouth_width)
+
+                    # Draw Mouth Indicator Dots
+                    cv2.circle(frame, (int(lip_top.x * w), int(lip_top.y * h)), 3, (0, 255, 255), -1)
+                    cv2.circle(frame, (int(lip_bottom.x * w), int(lip_bottom.y * h)), 3, (0, 255, 255), -1)
+
+                    is_mouth_open = (mar >= self.mouth_open_threshold)
+
+                    # Trigger Z when mouth opens
+                    if is_mouth_open:
+                        if not self.prev_mouth_open and (now - self.last_z_time) >= self.z_debounce:
+                            self._press_key('z')
+                            self.last_z_time = now
+                            action_text = ">> MOUTH OPEN -> Z KEY TRIGGERED! <<"
+                            action_color = (0, 255, 0)
+                        else:
+                            action_text = "MOUTH OPEN [Z]"
+                            action_color = (0, 255, 128)
+                    self.prev_mouth_open = is_mouth_open
+
+                    # ---------------- Eye Aspect Ratio (EAR) ----------------
+                    # Left Eye: Top: 159, Bottom: 145, Outer: 33, Inner: 133
+                    ear_left = math.hypot(flm[159].x - flm[145].x, flm[159].y - flm[145].y) / max(0.001, math.hypot(flm[33].x - flm[133].x, flm[33].y - flm[133].y))
+
+                    # Right Eye: Top: 386, Bottom: 374, Inner: 362, Outer: 263
+                    ear_right = math.hypot(flm[386].x - flm[374].x, flm[386].y - flm[374].y) / max(0.001, math.hypot(flm[362].x - flm[263].x, flm[362].y - flm[263].y))
+
+                    ear = (ear_left + ear_right) / 2.0
+
+                    # Draw Eye Indicator Dots
+                    cv2.circle(frame, (int(flm[159].x * w), int(flm[159].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int(flm[145].x * w), int(flm[145].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int(flm[386].x * w), int(flm[386].y * h)), 3, (255, 0, 255), -1)
+                    cv2.circle(frame, (int(flm[374].x * w), int(flm[374].y * h)), 3, (255, 0, 255), -1)
+
+                    dash_remaining = max(0.0, self.dash_cooldown - (now - self.last_dash_time))
+
+                    # Blink Detection: Eyes close below threshold, then reopen
+                    if ear < self.blink_threshold:
+                        if not self.is_eye_closed:
+                            self.is_eye_closed = True
+                            self.eye_closed_start = now
+                    else:
+                        if self.is_eye_closed:
+                            closure_duration = now - self.eye_closed_start
+                            # Intentional deliberate blink (between 0.08s and 0.70s)
+                            if 0.08 <= closure_duration <= 0.70:
+                                if dash_remaining <= 0.0:
+                                    self._press_key('space')
+                                    self.last_dash_time = now
+                                    action_text = ">> EYE BLINK -> SPACE DASH TRIGGERED! <<"
+                                    action_color = (0, 255, 255)
+                                else:
+                                    action_text = f"BLINK (DASH COOLDOWN [{dash_remaining:.1f}s])"
+                                    action_color = (0, 165, 255)
+                            self.is_eye_closed = False
+
+                # ================= 2. HAND TRACKING FOR STEERING =================
+                hand_results = self.hands.process(rgb)
+                target_keys = {'up': False, 'down': False, 'left': False, 'right': False}
+                hand_detected = False
+
+                if hand_results.multi_hand_landmarks:
                     hand_detected = True
-                    hand_landmarks = results.multi_hand_landmarks[0]
+                    hand_landmarks = hand_results.multi_hand_landmarks[0]
                     self.mp_draw.draw_landmarks(frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
 
-                    # Extract landmark positions
                     lm = hand_landmarks.landmark
                     wrist = lm[0]
                     thumb_tip = lm[4]
-                    index_mcp = lm[5]
                     index_tip = lm[8]
                     index_pip = lm[6]
                     middle_mcp = lm[9]
@@ -156,7 +252,7 @@ class GestureBridge:
                     pinky_tip = lm[20]
                     pinky_pip = lm[18]
 
-                    # Use Palm Center (middle MCP) for steering
+                    # Use Palm Center for Steering
                     hand_x = middle_mcp.x
                     hand_y = middle_mcp.y
 
@@ -165,7 +261,7 @@ class GestureBridge:
                     py = int(hand_y * h)
                     cv2.circle(frame, (px, py), 10, (0, 255, 255), -1)
 
-                    # 1. MOVEMENT DIRECTION (Relative to Central Deadzone)
+                    # Movement Steering outside deadzone
                     if hand_x < self.dz_x_min:
                         target_keys['left'] = True
                     elif hand_x > self.dz_x_max:
@@ -176,8 +272,7 @@ class GestureBridge:
                     elif hand_y > self.dz_y_max:
                         target_keys['down'] = True
 
-                    # 2. GESTURE: CLOSED FIST OR PINCH (Triggers Z Key)
-                    # Check distance from finger tips to wrist compared to PIP joints
+                    # Hand Gesture Backup: Fist / Pinch -> Z
                     dist_index = math.hypot(index_tip.x - wrist.x, index_tip.y - wrist.y)
                     dist_middle = math.hypot(middle_tip.x - wrist.x, middle_tip.y - wrist.y)
                     dist_ring = math.hypot(ring_tip.x - wrist.x, ring_tip.y - wrist.y)
@@ -188,30 +283,18 @@ class GestureBridge:
                     ref_ring = math.hypot(ring_pip.x - wrist.x, ring_pip.y - wrist.y)
                     ref_pinky = math.hypot(pinky_pip.x - wrist.x, pinky_pip.y - wrist.y)
 
-                    pinch_dist = math.hypot(thumb_tip.x - index_tip.x, thumb_tip.y - index_tip.y)
+                    is_fist = (dist_index < ref_index and dist_middle < ref_middle and dist_ring < ref_ring and dist_pinky < ref_pinky)
+                    is_pinch = (math.hypot(thumb_tip.x - index_tip.x, thumb_tip.y - index_tip.y) < 0.055)
 
-                    is_fist = (
-                        dist_index < ref_index and
-                        dist_middle < ref_middle and
-                        dist_ring < ref_ring and
-                        dist_pinky < ref_pinky
-                    )
-                    is_pinch = (pinch_dist < 0.055)
-
-                    is_z_gesture = is_fist or is_pinch
-
-                    if is_z_gesture:
+                    if (is_fist or is_pinch) and not self.prev_mouth_open:
                         if not self.prev_fist_state and (now - self.last_z_time) >= self.z_debounce:
                             self._press_key('z')
                             self.last_z_time = now
-                            action_text = ">> Z KEY TRIGGERED (CONFIRM/START) <<"
+                            action_text = ">> FIST/PINCH -> Z KEY TRIGGERED <<"
                             action_color = (0, 255, 0)
-                        else:
-                            action_text = "FIST / PINCH HELD [Z]"
-                            action_color = (0, 255, 128)
-                    self.prev_fist_state = is_z_gesture
+                    self.prev_fist_state = (is_fist or is_pinch)
 
-                    # 3. GESTURE: OPEN SPREAD PALM (Triggers Space Dash)
+                    # Hand Gesture Backup: Spread Palm -> Space Dash
                     is_spread_hand = (
                         dist_index > ref_index * 1.15 and
                         dist_middle > ref_middle * 1.15 and
@@ -221,23 +304,16 @@ class GestureBridge:
                     )
 
                     dash_remaining = max(0.0, self.dash_cooldown - (now - self.last_dash_time))
-
-                    if is_spread_hand and not is_z_gesture:
+                    if is_spread_hand and not is_fist and not is_pinch:
                         if not self.prev_dash_state and dash_remaining <= 0.0:
                             self._press_key('space')
                             self.last_dash_time = now
-                            action_text = ">> SPACE DASH TRIGGERED! <<"
-                            action_color = (0, 255, 255)
-                        elif dash_remaining > 0.0:
-                            action_text = f"DASH ON COOLDOWN [{dash_remaining:.1f}s]"
-                            action_color = (0, 165, 255)
-                        else:
-                            action_text = "SPREAD PALM READY [DASH]"
+                            action_text = ">> SPREAD PALM -> SPACE DASH! <<"
                             action_color = (0, 255, 255)
                     self.prev_dash_state = is_spread_hand
 
-                    # Update movement status string if no special action text
-                    if not is_z_gesture and not is_spread_hand:
+                    # Steering status display
+                    if action_text == "NEUTRAL":
                         active_dirs = [k.upper() for k, v in target_keys.items() if v]
                         if active_dirs:
                             action_text = f"STEERING: {' + '.join(active_dirs)}"
@@ -249,20 +325,21 @@ class GestureBridge:
                         self._set_held_state(key_name, should_hold)
                 else:
                     self.release_all_keys()
-                    action_text = "WAITING FOR HAND IN VIEW..."
-                    action_color = (100, 100, 255)
+                    if action_text == "NEUTRAL":
+                        action_text = "SHOW HAND TO STEER"
+                        action_color = (130, 130, 220)
 
                 # ================= HUD RENDERING =================
-                # Central Deadzone Box
+                # Central Deadzone Box for Hand Steering
                 x1 = int(self.dz_x_min * w)
                 x2 = int(self.dz_x_max * w)
                 y1 = int(self.dz_y_min * h)
                 y2 = int(self.dz_y_max * h)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)
-                cv2.putText(frame, "DEADZONE (HOLD)", (x1 + 6, y1 + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                cv2.putText(frame, "DEADZONE", (x1 + 6, y1 + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
                 # Active Arrows HUD
-                arrow_y = 50
+                arrow_y = 45
                 colors = {
                     'left': (0, 255, 0) if self.held['left'] else (70, 70, 70),
                     'up': (0, 255, 0) if self.held['up'] else (70, 70, 70),
@@ -270,18 +347,22 @@ class GestureBridge:
                     'right': (0, 255, 0) if self.held['right'] else (70, 70, 70),
                 }
 
-                cv2.putText(frame, "STEER:", (20, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                cv2.putText(frame, "<", (110, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, colors['left'], 3)
-                cv2.putText(frame, "^", (145, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, colors['up'], 3)
-                cv2.putText(frame, "v", (175, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, colors['down'], 3)
-                cv2.putText(frame, ">", (205, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, colors['right'], 3)
+                cv2.putText(frame, "STEER:", (20, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+                cv2.putText(frame, "<", (105, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.85, colors['left'], 3)
+                cv2.putText(frame, "^", (135, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.85, colors['up'], 3)
+                cv2.putText(frame, "v", (165, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.85, colors['down'], 3)
+                cv2.putText(frame, ">", (195, arrow_y), cv2.FONT_HERSHEY_SIMPLEX, 0.85, colors['right'], 3)
 
-                # Gesture Status Bar
+                # Real-Time Facial Metrics HUD (Top Right)
+                mouth_color = (0, 255, 0) if mar >= self.mouth_open_threshold else (180, 180, 180)
+                eye_color = (0, 255, 255) if ear < self.blink_threshold else (180, 180, 180)
+
+                cv2.putText(frame, f"MOUTH OPEN (Z): {mar:.2f}", (w - 260, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.55, mouth_color, 2)
+                cv2.putText(frame, f"EYES BLINK (SPACE): {ear:.2f}", (w - 260, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.55, eye_color, 2)
+
+                # Gesture Status Bar (Bottom)
                 cv2.rectangle(frame, (0, h - 50), (w, h), (20, 20, 20), -1)
                 cv2.putText(frame, f"STATUS: {action_text}", (20, h - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.65, action_color, 2)
-
-                # Help instructions overlay at top right
-                cv2.putText(frame, "Fist/Pinch = Z | Spread = Dash | 'q' = Quit", (w - 440, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
                 cv2.imshow("Neon Core - AI Vision Gesture Bridge", frame)
 

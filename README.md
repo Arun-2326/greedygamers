@@ -94,11 +94,11 @@ For demonstrations or hands-free gameplay, a standalone **AI Vision Gesture Brid
 2. Focus the game in your browser window.
 3. Use the following hand gestures in front of your webcam:
 
-| Hand Gesture | Emulated Key | Action in Game |
+| Gesture | Emulated Key | Action in Game |
 |---|---|---|
-| **Shift Hand Up / Down / Left / Right** | `Arrow Keys` | Continuous directional steering |
-| **Hold Hand in Center Deadzone** | *None* | Neutral / maintain current drift |
-| **Closed Fist or Pinch (Thumb + Index)** | `Z` | Start / Confirm / Resume / Restart |
-| **Open Spread Palm** | `Space` | Neon Surge Dash (2.0s cooldown) |
+| **Shift Hand Outside Deadzone** | `Arrow Keys` | Continuous directional steering (diagonals supported) |
+| **Hand Inside Center Box** | *None* | Neutral deadzone / safe drift |
+| **Mouth Open (or Fist / Pinch)** | `Z` | Start / Confirm / Resume / Restart |
+| **Eye Blink (or Spread Palm)** | `Space` | Neon Surge Dash (2.0s cooldown) |
 
 *Press `q` or `Esc` in the camera window to safely quit the gesture bridge.*
