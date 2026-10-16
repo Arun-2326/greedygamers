@@ -49,6 +49,37 @@ class InputManager {
     this._prevSpace = false;
 
     this._bindEvents();
+    this._bindCrossWindowSync();
+  }
+
+  // Cross-window synchronization for standalone webcam window
+  _bindCrossWindowSync() {
+    const handleGestureMsg = (msg) => {
+      if (!msg) return;
+      if (msg.type === 'steer') {
+        this.setWebcamDirection(!!msg.up, !!msg.down, !!msg.left, !!msg.right);
+      } else if (msg.type === 'z') {
+        this.setWebcamZ(!!msg.isHeld);
+      } else if (msg.type === 'space') {
+        this.setWebcamSpace(!!msg.isHeld);
+      }
+    };
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        this.faceChannel = new BroadcastChannel('neon-core-face-controller');
+        this.faceChannel.onmessage = (e) => handleGestureMsg(e.data);
+      } catch (err) {
+        console.warn('BroadcastChannel error:', err);
+      }
+    }
+
+    // Direct window message fallback
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.source === 'neon-core-webcam') {
+        handleGestureMsg(e.data);
+      }
+    });
   }
 
   // Webcam integration helpers

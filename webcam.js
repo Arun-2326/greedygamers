@@ -2,15 +2,17 @@
 // Features self-training / adaptive face calibration specifically tuned to the player's face geometry.
 // Automatically selects "HP True Vision FHD Camera".
 // Natural Face Mode: Face stays 100% natural as per the player (no lines/meshes painted on face).
+// Supports standalone detached window mode (webcam.html) via BroadcastChannel with sub-millisecond sync.
 // Controls:
 // - Turn left / right (Yaw)       -> Left / Right Arrow (Inverted for natural intuitive mirror movement)
 // - Head up / down (Pitch)       -> Up / Down Arrow (held continuously)
-// - Open mouth                   -> Z (held continuously, fresh trigger on open)
+// - Open mouth                   -> Z (Start Game / Confirm / Restart, held continuously)
 // - Blink / eyes closed          -> Space (held continuously, triggers 2.0s burst dash)
 
 (function () {
   class AdaptiveWebcamController {
     constructor() {
+      this.isStandalone = !!window.IS_STANDALONE;
       this.video = null;
       this.canvas = null;
       this.ctx = null;
@@ -22,17 +24,30 @@
       this.mediaPipeSending = false;
       this.cvLoopStarted = false;
       this.calibTimer = null;
+      this.detachedPopup = null;
+      this.checkPopupTimer = null;
 
-      // Offscreen canvas for zero-overhead background CV analysis (keeps face 100% natural & unpainted)
+      // Cross-window communication channel
+      this.faceChannel = null;
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          this.faceChannel = new BroadcastChannel('neon-core-face-controller');
+          this.faceChannel.onmessage = (e) => this._onChannelMessage(e.data);
+        } catch (err) {
+          console.warn('BroadcastChannel error:', err);
+        }
+      }
+
+      // Offscreen canvas for zero-overhead background CV analysis (leaves face 100% unpainted)
       this.offCanvas = document.createElement('canvas');
       this.offCanvas.width = 160;
       this.offCanvas.height = 120;
       this.offCtx = this.offCanvas.getContext('2d', { willReadFrequently: true });
 
-      // Personalized Calibration State ("Training on player's face")
+      // Personalized Calibration State
       this.isCalibrating = true;
       this.calibSamples = [];
-      this.calibTargetCount = 28; // ~0.7-0.9s of frames
+      this.calibTargetCount = 28;
       this.calibrated = false;
 
       // Baselines (personalized to the player's resting face)
@@ -46,7 +61,7 @@
         eyeContrast: 20
       };
 
-      // Smoothed filter values (Exponential Moving Average)
+      // Smoothed filter values
       this.smooth = {
         noseX: 0.50,
         noseY: 0.50,
@@ -57,7 +72,7 @@
         eyeContrast: 20
       };
 
-      // Relative Thresholds (Dynamically tuned to the player's face)
+      // Relative Thresholds
       this.mouthOpenThreshold = 0.22;
       this.blinkThreshold = 0.18;
       this.deadzoneX = 0.045;
@@ -71,18 +86,53 @@
       this.isEyeClosed = false;
       this.eyeClosedStart = 0;
       this.lastDashTime = 0;
-      this.dashCooldown = 2000; // ms
+      this.dashCooldown = 2000;
 
       this.heldDirs = { up: false, down: false, left: false, right: false };
 
       this._initDOM();
       this._startWebcam();
       this._initMediaPipe();
+
+      if (this.isStandalone) {
+        this._broadcastGesture('cam-started', {});
+        window.addEventListener('beforeunload', () => {
+          this._broadcastGesture('cam-closed', {});
+        });
+      }
+    }
+
+    _onChannelMessage(msg) {
+      if (!msg) return;
+      if (!this.isStandalone) {
+        if (msg.type === 'cam-started') {
+          // Another window took over camera, enter detached indicator mode
+          this._enterDetachedMode();
+        } else if (msg.type === 'cam-closed') {
+          // Standalone window closed, restore local camera
+          this._exitDetachedMode();
+        }
+      }
+    }
+
+    _broadcastGesture(type, data) {
+      const payload = Object.assign({ type, source: 'neon-core-webcam' }, data);
+      if (this.faceChannel) {
+        try { this.faceChannel.postMessage(payload); } catch (e) {}
+      }
+      if (window.opener) {
+        try { window.opener.postMessage(payload, '*'); } catch (e) {}
+      }
     }
 
     _initDOM() {
       const container = document.createElement('div');
       container.id = 'webcam-container';
+
+      const popoutButtonHtml = this.isStandalone
+        ? ''
+        : `<button id="webcam-popout-btn" title="Open camera in separate window">⧉ POP OUT</button>`;
+
       container.innerHTML = `
         <div id="webcam-header">
           <div style="display:flex;align-items:center;gap:6px;overflow:hidden;flex:1;">
@@ -90,7 +140,8 @@
             <select id="webcam-select" title="Choose Camera"></select>
           </div>
           <button id="webcam-recalib-btn" title="Re-calibrate / Train Face Baseline">TRAIN FACE</button>
-          <button id="webcam-toggle-btn" title="Toggle Cam Size">_</button>
+          ${popoutButtonHtml}
+          ${!this.isStandalone ? `<button id="webcam-toggle-btn" title="Toggle Cam Size">_</button>` : ''}
         </div>
         <div id="webcam-video-wrap">
           <video id="webcam-video" autoplay playsinline muted></video>
@@ -146,19 +197,89 @@
 
       // Re-calibrate button
       const recalibBtn = document.getElementById('webcam-recalib-btn');
-      recalibBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.startCalibration();
-      });
+      if (recalibBtn) {
+        recalibBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.startCalibration();
+        });
+      }
+
+      // Pop-out separate window button
+      const popoutBtn = document.getElementById('webcam-popout-btn');
+      if (popoutBtn) {
+        popoutBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._popoutWindow();
+        });
+      }
 
       // Toggle minimize button
       const toggleBtn = document.getElementById('webcam-toggle-btn');
-      toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.isMinimized = !this.isMinimized;
-        container.classList.toggle('minimized', this.isMinimized);
-        toggleBtn.textContent = this.isMinimized ? '□' : '_';
-      });
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.isMinimized = !this.isMinimized;
+          container.classList.toggle('minimized', this.isMinimized);
+          toggleBtn.textContent = this.isMinimized ? '□' : '_';
+        });
+      }
+    }
+
+    _popoutWindow() {
+      const popup = window.open('webcam.html', 'NeonCoreWebcam', 'width=340,height=560,resizable=yes');
+      if (popup) {
+        this._enterDetachedMode(popup);
+      }
+    }
+
+    _enterDetachedMode(popup) {
+      if (popup) this.detachedPopup = popup;
+
+      // Stop local camera stream to free hardware for the separate window
+      if (this.stream) {
+        this.stream.getTracks().forEach(t => t.stop());
+        this.stream = null;
+      }
+      this.isTracking = false;
+
+      this.container.classList.add('detached');
+      this.container.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;"></span>
+          <span style="color:#00ff88;font-size:11px;font-weight:bold;">WEBCAM IN SEPARATE WINDOW</span>
+        </div>
+        <div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">Face controls are streaming live to game</div>
+        <button id="webcam-redock-btn">⬇ DOCK CAMERA BACK</button>
+      `;
+
+      const redockBtn = document.getElementById('webcam-redock-btn');
+      if (redockBtn) {
+        redockBtn.onclick = () => {
+          if (this.detachedPopup && !this.detachedPopup.closed) {
+            this.detachedPopup.close();
+          }
+          this._exitDetachedMode();
+        };
+      }
+
+      // Check if popup closed periodically
+      if (this.checkPopupTimer) clearInterval(this.checkPopupTimer);
+      this.checkPopupTimer = setInterval(() => {
+        if (this.detachedPopup && this.detachedPopup.closed) {
+          clearInterval(this.checkPopupTimer);
+          this._exitDetachedMode();
+        }
+      }, 1000);
+    }
+
+    _exitDetachedMode() {
+      if (this.checkPopupTimer) clearInterval(this.checkPopupTimer);
+      this.detachedPopup = null;
+      if (this.container && this.container.parentNode) {
+        this.container.parentNode.removeChild(this.container);
+      }
+      this._initDOM();
+      this._startWebcam();
     }
 
     startCalibration() {
@@ -173,11 +294,9 @@
         this.statusDot.style.boxShadow = '0 0 8px #ffea00';
       }
 
-      // Safeguard timer: Guarantees training finishes cleanly within 1.5s
       if (this.calibTimer) clearTimeout(this.calibTimer);
       this.calibTimer = setTimeout(() => {
         if (this.isCalibrating) {
-          console.log('[AI Vision] Calibration auto-finalizing via timer safeguard...');
           this._finalizeCalibration();
         }
       }, 1500);
@@ -200,7 +319,6 @@
         this.baseline.eyeContrast = this.calibSamples.reduce((acc, s) => acc + (s.eyeContrast || 20), 0) / len;
       }
 
-      // Clamp baseline values to valid numeric ranges
       this.baseline.noseX = Number.isFinite(this.baseline.noseX) ? this.baseline.noseX : 0.50;
       this.baseline.noseY = Number.isFinite(this.baseline.noseY) ? this.baseline.noseY : 0.50;
       this.baseline.yaw = Number.isFinite(this.baseline.yaw) ? this.baseline.yaw : 0.0;
@@ -209,7 +327,6 @@
       this.baseline.mouthDark = Number.isFinite(this.baseline.mouthDark) ? this.baseline.mouthDark : 0.08;
       this.baseline.eyeContrast = Number.isFinite(this.baseline.eyeContrast) ? this.baseline.eyeContrast : 20;
 
-      // Personalized thresholds
       this.mouthOpenThreshold = Math.max(0.18, this.baseline.mar * 1.55 + 0.05);
       this.blinkThreshold = Math.max(0.14, this.baseline.ear * 0.70);
 
@@ -228,8 +345,6 @@
           this.hudNotice.style.display = 'none';
         }
       }, 350);
-
-      console.log('[AI Vision] Training complete! Personalized baseline:', this.baseline);
     }
 
     async _startWebcam() {
@@ -238,11 +353,9 @@
           throw new Error('getUserMedia not supported in this browser environment');
         }
 
-        // 1. Enumerate devices
         let devices = await navigator.mediaDevices.enumerateDevices();
         let videoDevices = devices.filter(d => d.kind === 'videoinput');
 
-        // Probe permission if device labels are blank
         if (videoDevices.length > 0 && !videoDevices[0].label) {
           try {
             const probeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -252,14 +365,13 @@
           } catch (e) {}
         }
 
-        // 2. Select HP True Vision camera with top priority
         let chosenDeviceId = null;
         const hpDevice = videoDevices.find(d => /hp|true\s*vision/i.test(d.label));
         const nonVirtual = videoDevices.find(d => !/motorola|virtual/i.test(d.label));
 
         if (hpDevice) {
           chosenDeviceId = hpDevice.deviceId;
-          console.log('[AI Vision] Target matched: HP True Vision FHD Camera');
+          console.log('[AI Vision] Matched HP True Vision Camera');
         } else if (nonVirtual) {
           chosenDeviceId = nonVirtual.deviceId;
         } else if (videoDevices.length > 1) {
@@ -382,7 +494,7 @@
     _onFaceMeshResults(results) {
       const now = performance.now();
 
-      // Keep visible canvas completely clear so the face stays 100% natural
+      // Clear visible canvas to keep natural video feed completely unaltered
       if (this.ctx && this.canvas) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
@@ -395,16 +507,16 @@
 
         const flm = results.multiFaceLandmarks[0];
 
-        // 1. Raw Coordinates Extraction
+        // 1. Raw Coordinates
         const rawNoseX = 1.0 - flm[1].x;
         const rawNoseY = flm[1].y;
 
-        // Yaw calculation: Turn Left / Turn Right
+        // Yaw calculation
         const dLeft = Math.abs(flm[1].x - flm[234].x);
         const dRight = Math.abs(flm[1].x - flm[454].x);
         const rawYaw = (dLeft - dRight) / Math.max(0.001, dLeft + dRight);
 
-        // Pitch calculation: Head Up / Head Down
+        // Pitch calculation
         const eyeY = flm[168].y;
         const chinY = flm[152].y;
         const rawPitch = (flm[1].y - eyeY) / Math.max(0.001, chinY - eyeY);
@@ -449,11 +561,10 @@
           return;
         }
 
-        // 4. Relative Head Steering (Inverted Left/Right for natural intuitive movement)
+        // 4. Relative Head Steering (Inverted Left/Right for natural intuitive mirror movement)
         const deltaX = (this.smooth.noseX - this.baseline.noseX) + (this.smooth.yaw - this.baseline.yaw) * 0.45;
         const deltaY = rawPitch - this.baseline.noseY;
 
-        // Left / Right direction mapping corrected to match player intention
         const left = deltaX > this.deadzoneX;
         const right = deltaX < -this.deadzoneX;
         const up = deltaY < -this.deadzoneY;
@@ -466,14 +577,14 @@
         if (mouthIsOpen) {
           if (!this.isMouthOpen && (now - this.lastZTime) >= this.zDebounce) {
             this.lastZTime = now;
-            if (window.input) window.input.setWebcamZ(true);
+            this._triggerZ(true);
             this._flashMouthFeedback();
           } else {
-            if (window.input) window.input.setWebcamZ(true);
+            this._triggerZ(true);
           }
         } else {
           if (this.isMouthOpen) {
-            if (window.input) window.input.setWebcamZ(false);
+            this._triggerZ(false);
           }
         }
         this.isMouthOpen = mouthIsOpen;
@@ -488,15 +599,15 @@
             this.eyeClosedStart = now;
             if (dashRemaining <= 0) {
               this.lastDashTime = now;
-              if (window.input) window.input.setWebcamSpace(true);
+              this._triggerSpace(true);
               this._flashBlinkFeedback();
             }
           } else {
-            if (window.input) window.input.setWebcamSpace(true);
+            this._triggerSpace(true);
           }
         } else {
           if (this.isEyeClosed) {
-            if (window.input) window.input.setWebcamSpace(false);
+            this._triggerSpace(false);
             this.isEyeClosed = false;
           }
         }
@@ -520,7 +631,6 @@
         return;
       }
 
-      // 1. Dispatch to MediaPipe asynchronously if initialized (non-blocking)
       if (this.faceMesh && !this.mediaPipeSending) {
         this.mediaPipeSending = true;
         this.faceMesh.send({ image: this.video })
@@ -528,28 +638,24 @@
           .catch(() => { this.mediaPipeSending = false; });
       }
 
-      // 2. If MediaPipe is active, it handles tracking in _onFaceMeshResults
       if (this.useMediaPipe) {
         requestAnimationFrame(() => this._cvLoop());
         return;
       }
 
-      // 3. High-Speed Offscreen Native CV Engine (Leaves on-screen video completely natural & unpainted)
+      // Background Offscreen Native CV Engine
       const w = 160;
       const h = 120;
       const now = performance.now();
 
-      // Keep on-screen canvas completely transparent
       if (this.ctx && this.canvas) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
 
-      // Draw frame to hidden offscreen canvas for computer vision analysis
       this.offCtx.drawImage(this.video, 0, 0, w, h);
       const frameData = this.offCtx.getImageData(0, 0, w, h);
       const data = frameData.data;
 
-      // Illumination-invariant face centroid detection
       let sumX = 0, sumY = 0, skinCount = 0;
       const step = 2;
 
@@ -596,7 +702,6 @@
       this.smooth.noseX = this.smooth.noseX * 0.70 + (cx / w) * 0.30;
       this.smooth.noseY = this.smooth.noseY * 0.70 + (cy / h) * 0.30;
 
-      // Sample mouth region (Lower center of detected face)
       const mouthY = Math.min(h - 8, Math.round(cy + 13));
       const mouthX = Math.round(rawCx);
       let mouthDarkPixels = 0;
@@ -615,7 +720,6 @@
       const mouthDarkRatio = mouthTotalPixels > 0 ? (mouthDarkPixels / mouthTotalPixels) : 0;
       this.smooth.mouthDark = this.smooth.mouthDark * 0.70 + mouthDarkRatio * 0.30;
 
-      // Sample eye region for blink detection
       const eyeY = Math.max(5, Math.round(cy - 9));
       const eyeX1 = Math.round(rawCx - 10);
       const eyeX2 = Math.round(rawCx + 10);
@@ -640,7 +744,6 @@
       const avgEyeContrast = eyeSamples > 0 ? (eyeContrast / eyeSamples) : 20;
       this.smooth.eyeContrast = this.smooth.eyeContrast * 0.70 + avgEyeContrast * 0.30;
 
-      // Calibration Phase
       if (this.isCalibrating) {
         this.calibSamples.push({
           noseX: cx / w,
@@ -660,11 +763,9 @@
           this._finalizeCalibration();
         }
       } else {
-        // Relative Head Steering (Inverted Left/Right for natural intuitive movement)
         const deltaX = (cx / w) - this.baseline.noseX;
         const deltaY = (cy / h) - this.baseline.noseY;
 
-        // Left / Right direction mapping corrected to match player intention
         const left = deltaX > this.deadzoneX;
         const right = deltaX < -this.deadzoneX;
         const up = deltaY < -this.deadzoneY;
@@ -672,26 +773,24 @@
 
         this._updateSteering(up, down, left, right);
 
-        // Relative Mouth Open Detection -> Z (Held)
         const mouthThreshold = Math.max(0.12, (this.baseline.mouthDark || 0.05) + 0.10);
         const mouthIsOpen = this.smooth.mouthDark >= mouthThreshold;
 
         if (mouthIsOpen) {
           if (!this.isMouthOpen && (now - this.lastZTime) >= this.zDebounce) {
             this.lastZTime = now;
-            if (window.input) window.input.setWebcamZ(true);
+            this._triggerZ(true);
             this._flashMouthFeedback();
           } else {
-            if (window.input) window.input.setWebcamZ(true);
+            this._triggerZ(true);
           }
         } else {
           if (this.isMouthOpen) {
-            if (window.input) window.input.setWebcamZ(false);
+            this._triggerZ(false);
           }
         }
         this.isMouthOpen = mouthIsOpen;
 
-        // Relative Blink Detection -> Space Dash (Held)
         const blinkThreshold = Math.max(8, (this.baseline.eyeContrast || 20) * 0.65);
         const eyesAreClosed = this.smooth.eyeContrast <= blinkThreshold;
         const dashRemaining = Math.max(0, (this.dashCooldown - (now - this.lastDashTime)) / 1000);
@@ -702,15 +801,15 @@
             this.eyeClosedStart = now;
             if (dashRemaining <= 0) {
               this.lastDashTime = now;
-              if (window.input) window.input.setWebcamSpace(true);
+              this._triggerSpace(true);
               this._flashBlinkFeedback();
             }
           } else {
-            if (window.input) window.input.setWebcamSpace(true);
+            this._triggerSpace(true);
           }
         } else {
           if (this.isEyeClosed) {
-            if (window.input) window.input.setWebcamSpace(false);
+            this._triggerSpace(false);
             this.isEyeClosed = false;
           }
         }
@@ -722,9 +821,14 @@
 
     _updateSteering(up, down, left, right) {
       this.heldDirs = { up, down, left, right };
+
+      // Local input manager
       if (window.input && window.input.setWebcamDirection) {
         window.input.setWebcamDirection(up, down, left, right);
       }
+
+      // Cross-window sync (Broadcast to game window)
+      this._broadcastGesture('steer', { up, down, left, right });
 
       const elL = document.getElementById('steer-left');
       const elU = document.getElementById('steer-up');
@@ -735,6 +839,20 @@
       if (elU) elU.classList.toggle('active', up);
       if (elD) elD.classList.toggle('active', down);
       if (elR) elR.classList.toggle('active', right);
+    }
+
+    _triggerZ(isHeld) {
+      if (window.input && window.input.setWebcamZ) {
+        window.input.setWebcamZ(isHeld);
+      }
+      this._broadcastGesture('z', { isHeld });
+    }
+
+    _triggerSpace(isHeld) {
+      if (window.input && window.input.setWebcamSpace) {
+        window.input.setWebcamSpace(isHeld);
+      }
+      this._broadcastGesture('space', { isHeld });
     }
 
     _flashMouthFeedback() {

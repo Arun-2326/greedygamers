@@ -190,6 +190,53 @@ canvas {
   box-shadow: 0 0 6px #00ff88;
 }
 
+#webcam-popout-btn {
+  background: transparent;
+  border: 1px solid rgba(0, 240, 255, 0.6);
+  color: #00f0ff;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+#webcam-popout-btn:hover {
+  background: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 6px #00f0ff;
+}
+
+#webcam-container.detached {
+  width: auto;
+  min-width: 220px;
+  max-width: 290px;
+  background: rgba(4, 8, 16, 0.95);
+  border: 1px solid rgba(0, 255, 136, 0.6);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.25);
+  padding: 8px 12px;
+}
+
+#webcam-redock-btn {
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid #00f0ff;
+  color: #00f0ff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+#webcam-redock-btn:hover {
+  background: rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 8px #00f0ff;
+}
+
 .webcam-meter-row {
   display: flex;
   align-items: center;
