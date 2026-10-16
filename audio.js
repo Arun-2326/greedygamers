@@ -177,6 +177,29 @@ class SoundFX {
     osc.stop(t + 0.15);
   }
 
+  playHunterDash() {
+    this._init();
+    if (!this.ctx || !this.enabled) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(450, t + 0.10);
+    osc.frequency.exponentialRampToValueAtTime(90, t + 0.32);
+
+    gain.gain.setValueAtTime(0.24, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.32);
+  }
+
   playAlert() {
     this._init();
     if (!this.ctx || !this.enabled) return;

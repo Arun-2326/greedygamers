@@ -1,5 +1,5 @@
 // game.js — Neon Core: AI Arena
-// Adheres strictly to AGENTS.md rules. Dynamic full-screen resolution, 5 threat levels, arrow player, pause with Z.
+// Adheres strictly to AGENTS.md rules. Endless Survival Mode, Curved Trajectories, Hunter Speed Dash, Arrow Player.
 
 class Game {
   constructor() {
@@ -22,36 +22,36 @@ class Game {
     // Timing
     this.lastTime = performance.now();
     this.gameOverTimer = 0; // Rule 2: ignore Z for the first 1s of game-over
-    this.gameWon = false;
 
     // Juice, Tension & Visuals
     this.particles = [];
     this.ambientParticles = [];
     this.floatingTexts = [];
     this.playerTrail = [];
+    this.droneTrail = [];
     this.shockwaves = [];
     this.screenShake = 0;
     this.bannerText = '';
     this.bannerTimer = 0;
     this.prevThreatLevel = 1;
 
-    // Initialize 40 ambient floating particles for cybernetic atmosphere
-    for (let i = 0; i < 40; i++) {
+    // Initialize 45 ambient floating particles for cybernetic atmosphere
+    for (let i = 0; i < 45; i++) {
       this.ambientParticles.push({
         x: Math.random() * this.width,
         y: Math.random() * this.height,
         radius: 1 + Math.random() * 2,
-        speedY: -0.2 - Math.random() * 0.4,
+        speedY: -0.2 - Math.random() * 0.45,
         alpha: 0.15 + Math.random() * 0.35,
         color: Math.random() > 0.5 ? '#00f0ff' : '#ff00aa'
       });
     }
 
-    // Game stats
+    // Game stats (Endless Survival Mode)
     this.score = 0;
     this.coresCollected = 0;
     this.repairProgress = 0; // 0 to 4
-    this.survivalTimer = 150.0; // 2 minutes 30 seconds
+    this.survivalTime = 0.0; // Counts UP endlessly until player loses
 
     // Combo System
     this.combo = 1;
@@ -61,7 +61,7 @@ class Game {
     // EMP Overdrive state
     this.empTimer = 0;
 
-    // Player state (Rendered as an aerodynamic cyber arrow)
+    // Player state (Aerodynamic Cyber Arrow)
     this.player = {
       x: this.width / 2,
       y: this.height / 2,
@@ -189,22 +189,30 @@ class Game {
       y: baseRoute[startIdx].y,
       speed: speed,
       radius: 20,
-      state: 'MOVING', // 'WARNING' or 'MOVING'
+      state: 'MOVING', // 'WARNING', 'MOVING', 'DASHING'
       warningTimer: 0,
-      warningDuration: 1.35, // Rule 3: at least 1s warning before route segment
+      warningDuration: 1.25, // Rule 3: at least 1s warning before route segment
       isTracking: false,
+      isDashing: false,
       rewardedNearMiss: false,
+      // Curved trajectory parameters
+      isCurved: false,
+      startPoint: { x: baseRoute[startIdx].x, y: baseRoute[startIdx].y },
+      controlPoint: { x: baseRoute[startIdx].x, y: baseRoute[startIdx].y },
+      endPoint: { x: baseRoute[(startIdx + 1) % baseRoute.length].x, y: baseRoute[(startIdx + 1) % baseRoute.length].y },
+      curveT: 0,
+      curveLength: 200,
       nextTarget: { x: baseRoute[(startIdx + 1) % baseRoute.length].x, y: baseRoute[(startIdx + 1) % baseRoute.length].y },
       baseTarget: { x: baseRoute[(startIdx + 1) % baseRoute.length].x, y: baseRoute[(startIdx + 1) % baseRoute.length].y }
     };
   }
 
   getThreatLevel() {
-    if (this.score >= 3800 || this.survivalTimer < 30) return 5; // OMEGA MATRIX (4 Drones)
-    if (this.score >= 2400 || this.survivalTimer < 60) return 4; // VIPER SQUADRON (3 Drones)
-    if (this.score >= 1400 || this.survivalTimer < 90) return 3; // APEX PREDATOR (2 Drones, high aggression)
-    if (this.score >= 600 || this.survivalTimer < 120) return 2;  // INTERCEPT SEEKERS (2 Drones, predictive tracking)
-    return 1;                                                    // SCOUT SURVEILLANCE (2 Drones, regional patrols)
+    if (this.score >= 5000 || this.survivalTime >= 180) return 5; // OMEGA MATRIX (All 4 Drones)
+    if (this.score >= 3200 || this.survivalTime >= 120) return 4; // VIPER SQUADRON (3 Drones)
+    if (this.score >= 1800 || this.survivalTime >= 70)  return 3; // APEX PREDATOR (2 Drones, high aggression)
+    if (this.score >= 800  || this.survivalTime >= 30)  return 2; // INTERCEPT SEEKERS (Curved tracking)
+    return 1;                                                    // SCOUT SURVEILLANCE
   }
 
   startNewGame() {
@@ -212,9 +220,8 @@ class Game {
     this.score = 0;
     this.coresCollected = 0;
     this.repairProgress = 0;
-    this.survivalTimer = 150.0;
+    this.survivalTime = 0.0;
     this.gameOverTimer = 0;
-    this.gameWon = false;
     this.isNewRecord = false;
     this.combo = 1;
     this.comboTimer = 0;
@@ -243,6 +250,7 @@ class Game {
     this.particles = [];
     this.floatingTexts = [];
     this.playerTrail = [];
+    this.droneTrail = [];
     this.shockwaves = [];
 
     this.ai.reset();
@@ -332,7 +340,7 @@ class Game {
       return;
     }
 
-    // PLAYING STATE
+    // PLAYING STATE (Endless Mode)
     if (this.state === 'PLAYING') {
       // Toggle Pause with Z (AGENTS.md Rule 1 compliant: ONLY allowed 6 keys)
       if (window.input.consumeZ()) {
@@ -340,17 +348,8 @@ class Game {
         return;
       }
 
-      // Countdown survival timer
-      this.survivalTimer -= dt;
-      if (this.survivalTimer <= 0) {
-        this.survivalTimer = 0;
-        this.gameWon = true;
-        this.state = 'GAMEOVER';
-        this.screenShake = 0;
-        this.gameOverTimer = 0;
-        this._checkHighScore();
-        return;
-      }
+      // Survival time counts UP endlessly
+      this.survivalTime += dt;
 
       // Track escalating 5 threat levels
       const currentThreat = this.getThreatLevel();
@@ -425,7 +424,6 @@ class Game {
       if (dx !== 0 || dy !== 0) {
         this.player.targetAngle = Math.atan2(dy, dx);
       }
-      // Smooth interpolation for arrow rotation
       let diff = this.player.targetAngle - this.player.angle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
@@ -496,12 +494,13 @@ class Game {
         this._updateDrone(drone, dt, currentThreat);
 
         // Near-miss / Close Call adrenaline bonus (Dodging a charging drone)
-        if (drone.state === 'MOVING' && drone.isTracking && !drone.rewardedNearMiss && this.player.invulnTimer <= 0) {
+        if ((drone.state === 'MOVING' || drone.state === 'DASHING') && drone.isTracking && !drone.rewardedNearMiss && this.player.invulnTimer <= 0) {
           const dist = Math.hypot(this.player.x - drone.x, this.player.y - drone.y);
-          if (dist < this.player.radius + drone.radius + 36 && dist > this.player.radius + drone.radius) {
+          if (dist < this.player.radius + drone.radius + 40 && dist > this.player.radius + drone.radius) {
             drone.rewardedNearMiss = true;
-            this.score += 150;
-            this._addFloatingText('CLOSE CALL! +150', this.player.x, this.player.y - 30, '#00ffcc');
+            const pts = drone.isDashing ? 250 : 150;
+            this.score += pts;
+            this._addFloatingText(drone.isDashing ? 'DASH EVADED! +250' : 'CLOSE CALL! +150', this.player.x, this.player.y - 30, '#00ffcc');
             if (window.sound) window.sound.playCloseCall();
             this._createRepairEffect(this.player.x, this.player.y);
           }
@@ -513,7 +512,7 @@ class Game {
           if (dist < this.player.radius + drone.radius) {
             this.player.integrity--;
             this.player.invulnTimer = this.player.invulnDuration;
-            this.screenShake = 10;
+            this.screenShake = 12;
             this.combo = 1;
 
             if (window.sound) window.sound.playHit();
@@ -528,7 +527,6 @@ class Game {
 
             if (this.player.integrity <= 0) {
               this.state = 'GAMEOVER';
-              this.gameWon = false;
               this.screenShake = 0;
               this.gameOverTimer = 0;
               this._checkHighScore();
@@ -549,12 +547,21 @@ class Game {
         }
       }
 
-      // Update Trails
+      // Update Player Trails
       for (let i = this.playerTrail.length - 1; i >= 0; i--) {
         const tr = this.playerTrail[i];
         tr.alpha -= dt * 2.8;
         if (tr.alpha <= 0) {
           this.playerTrail.splice(i, 1);
+        }
+      }
+
+      // Update Drone Dash Trails
+      for (let i = this.droneTrail.length - 1; i >= 0; i--) {
+        const dtr = this.droneTrail[i];
+        dtr.alpha -= dt * 3.5;
+        if (dtr.alpha <= 0) {
+          this.droneTrail.splice(i, 1);
         }
       }
 
@@ -664,81 +671,151 @@ class Game {
   }
 
   _updateDrone(drone, dt, threatLevel) {
-    // Dynamic drone speed based on threat level (smooth and manageable)
-    const baseSpeeds = [112, 112, 128, 145, 162, 180];
-    const baseSpeed = baseSpeeds[threatLevel] || 112;
+    // Dynamic drone speed scaling based on threat level and score
+    const baseSpeeds = [115, 115, 132, 150, 168, 186];
+    const baseSpeed = baseSpeeds[threatLevel] || 115;
+    const scoreBonusSpeed = Math.min(45, (this.score / 700) * 3.5);
 
     const speedMult = this.empTimer > 0 ? 0.5 : 1.0;
-    const finalSpeed = baseSpeed * speedMult;
+    const finalSpeed = (baseSpeed + scoreBonusSpeed) * speedMult;
 
     if (drone.state === 'WARNING') {
       drone.warningTimer += dt;
       if (drone.warningTimer >= drone.warningDuration) {
-        drone.state = 'MOVING';
+        // Warning completed! Initiate Dash if Hunter
+        if (drone.isHunter && threatLevel >= 2) {
+          drone.state = 'DASHING';
+          drone.isDashing = true;
+          if (window.sound) window.sound.playHunterDash();
+        } else {
+          drone.state = 'MOVING';
+          drone.isDashing = false;
+        }
       }
       return;
     }
 
-    if (drone.state === 'MOVING') {
-      const dx = drone.nextTarget.x - drone.x;
-      const dy = drone.nextTarget.y - drone.y;
-      const dist = Math.hypot(dx, dy);
+    if (drone.state === 'MOVING' || drone.state === 'DASHING') {
+      // Dash multiplier
+      const dashSpeedMult = drone.isDashing ? 2.35 : 1.0;
+      const currentMoveSpeed = finalSpeed * dashSpeedMult;
 
-      if (dist < 6) {
-        // Reached destination! Select next target
-        drone.rewardedNearMiss = false;
+      if (drone.isDashing) {
+        // Spawn dash smoke/burn trail
+        this.droneTrail.push({
+          x: drone.x,
+          y: drone.y,
+          radius: drone.radius * 0.9,
+          color: drone.color,
+          alpha: 0.65
+        });
+      }
 
-        // Player Tracking Logic based on Threat Level
-        let shouldTrack = false;
-        if (threatLevel === 2) {
-          shouldTrack = drone.isHunter ? !drone.isTracking : Math.random() < 0.25;
-        } else if (threatLevel === 3) {
-          shouldTrack = drone.isHunter ? true : Math.random() < 0.5;
-        } else if (threatLevel === 4) {
-          // Level 4: 2 hunter drones track player
-          shouldTrack = drone.isHunter ? true : Math.random() < 0.6;
-        } else if (threatLevel === 5) {
-          // Level 5: Aggressive coordinated chase
-          shouldTrack = drone.isHunter ? true : Math.random() < 0.75;
-        }
+      if (drone.isCurved) {
+        // Advance along Quadratic Bezier Arc
+        drone.curveT += (currentMoveSpeed * dt) / drone.curveLength;
+        const t = Math.min(1.0, drone.curveT);
 
-        if (shouldTrack) {
-          // TARGET ACQUISITION: Target the player's predicted location
-          drone.isTracking = true;
-          const pPredictX = this.player.x + (this.player.x - this.player.prevX) * 12;
-          const pPredictY = this.player.y + (this.player.y - this.player.prevY) * 12;
+        const inv = 1 - t;
+        drone.x = inv * inv * drone.startPoint.x + 2 * inv * t * drone.controlPoint.x + t * t * drone.endPoint.x;
+        drone.y = inv * inv * drone.startPoint.y + 2 * inv * t * drone.controlPoint.y + t * t * drone.endPoint.y;
 
-          const targetX = Math.max(50, Math.min(this.width - 50, pPredictX));
-          const targetY = Math.max(90, Math.min(this.height - 50, pPredictY));
-
-          drone.baseTarget = { x: targetX, y: targetY };
-          drone.nextTarget = { x: targetX, y: targetY };
-
-          drone.state = 'WARNING';
-          drone.warningTimer = 0;
-
-          if (window.sound) window.sound.playLockOn();
-        } else {
-          // PATROL NAVIGATION: Follow circuit with Adaptive AI nudge
-          drone.isTracking = false;
-          drone.currentWaypointIdx = (drone.currentWaypointIdx + 1) % drone.baseRoute.length;
-          const nextIdx = (drone.currentWaypointIdx + 1) % drone.baseRoute.length;
-          const baseTarget = drone.baseRoute[nextIdx];
-
-          const adapted = this.ai.getAdaptedWaypoint(baseTarget.x, baseTarget.y);
-          drone.baseTarget = baseTarget;
-          drone.nextTarget = adapted;
-
-          drone.state = 'WARNING';
-          drone.warningTimer = 0;
-
-          if (window.sound) window.sound.playTelegraph();
+        if (t >= 1.0) {
+          this._selectNextDroneWaypoint(drone, threatLevel);
         }
       } else {
-        const moveDist = finalSpeed * dt;
-        drone.x += (dx / dist) * moveDist;
-        drone.y += (dy / dist) * moveDist;
+        // Linear movement between waypoints
+        const dx = drone.nextTarget.x - drone.x;
+        const dy = drone.nextTarget.y - drone.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 6) {
+          this._selectNextDroneWaypoint(drone, threatLevel);
+        } else {
+          drone.x += (dx / dist) * currentMoveSpeed * dt;
+          drone.y += (dy / dist) * currentMoveSpeed * dt;
+        }
       }
+    }
+  }
+
+  _selectNextDroneWaypoint(drone, threatLevel) {
+    drone.rewardedNearMiss = false;
+    drone.isDashing = false;
+
+    // Determine if drone should track the player with curved trajectory
+    let shouldTrack = false;
+    if (threatLevel === 2) {
+      shouldTrack = drone.isHunter ? !drone.isTracking : Math.random() < 0.25;
+    } else if (threatLevel === 3) {
+      shouldTrack = drone.isHunter ? true : Math.random() < 0.5;
+    } else if (threatLevel === 4) {
+      shouldTrack = drone.isHunter ? true : Math.random() < 0.65;
+    } else if (threatLevel >= 5) {
+      shouldTrack = drone.isHunter ? true : Math.random() < 0.8;
+    }
+
+    drone.startPoint = { x: drone.x, y: drone.y };
+
+    if (shouldTrack) {
+      // CURVED PURSUIT TRACKING & SPEED DASH
+      drone.isTracking = true;
+      drone.isCurved = true;
+
+      // Predicted player coordinate
+      const pPredictX = this.player.x + (this.player.x - this.player.prevX) * 14;
+      const pPredictY = this.player.y + (this.player.y - this.player.prevY) * 14;
+
+      const targetX = Math.max(50, Math.min(this.width - 50, pPredictX));
+      const targetY = Math.max(90, Math.min(this.height - 50, pPredictY));
+
+      drone.endPoint = { x: targetX, y: targetY };
+      drone.nextTarget = drone.endPoint;
+
+      // Calculate curved control point (bowed outwards to flank and track along an arc)
+      const midX = (drone.startPoint.x + drone.endPoint.x) / 2;
+      const midY = (drone.startPoint.y + drone.endPoint.y) / 2;
+      const vX = drone.endPoint.x - drone.startPoint.x;
+      const vY = drone.endPoint.y - drone.startPoint.y;
+      const vLen = Math.hypot(vX, vY) || 1;
+
+      // Perpendicular normal vector
+      const nX = -vY / vLen;
+      const nY = vX / vLen;
+
+      // Random left/right arc flank
+      const bow = (Math.random() > 0.5 ? 1 : -1) * (80 + Math.random() * 90);
+      drone.controlPoint = {
+        x: Math.max(40, Math.min(this.width - 40, midX + nX * bow)),
+        y: Math.max(80, Math.min(this.height - 40, midY + nY * bow))
+      };
+
+      const d0 = Math.hypot(drone.controlPoint.x - drone.startPoint.x, drone.controlPoint.y - drone.startPoint.y);
+      const d1 = Math.hypot(drone.endPoint.x - drone.controlPoint.x, drone.endPoint.y - drone.controlPoint.y);
+      drone.curveLength = Math.max(20, (d0 + d1 + vLen) / 2);
+      drone.curveT = 0;
+
+      drone.state = 'WARNING';
+      drone.warningTimer = 0;
+
+      if (window.sound) window.sound.playLockOn();
+    } else {
+      // PATROL NAVIGATION: Follow circuit with Adaptive AI nudge
+      drone.isTracking = false;
+      drone.isCurved = false;
+
+      drone.currentWaypointIdx = (drone.currentWaypointIdx + 1) % drone.baseRoute.length;
+      const nextIdx = (drone.currentWaypointIdx + 1) % drone.baseRoute.length;
+      const baseTarget = drone.baseRoute[nextIdx];
+
+      const adapted = this.ai.getAdaptedWaypoint(baseTarget.x, baseTarget.y);
+      drone.baseTarget = baseTarget;
+      drone.nextTarget = adapted;
+
+      drone.state = 'WARNING';
+      drone.warningTimer = 0;
+
+      if (window.sound) window.sound.playTelegraph();
     }
   }
 
@@ -795,7 +872,7 @@ class Game {
     ctx.clearRect(0, 0, this.width, this.height);
 
     ctx.save();
-    // Only apply screen shake during active gameplay (never in Game Over / Title / Paused)
+    // Only apply screen shake during active gameplay
     if (this.state === 'PLAYING' && this.screenShake > 0.05) {
       const shakeX = (Math.random() - 0.5) * this.screenShake;
       const shakeY = (Math.random() - 0.5) * this.screenShake;
@@ -894,21 +971,35 @@ class Game {
   _renderGameplay(ctx) {
     const currentThreat = this.getThreatLevel();
 
-    // Render AI Waypoint Markers and Tracking Lasers on floor
+    // Render AI Waypoint Markers, Curved Trajectories and Tracking Lasers on floor
     for (const drone of this.drones) {
       if (drone.minLevel > currentThreat) continue;
 
       if (drone.isTracking) {
-        // Tracking Laser targeting the player
         ctx.save();
-        ctx.setLineDash([10, 6]);
-        ctx.lineDashOffset = -performance.now() / 25;
-        ctx.strokeStyle = drone.color;
-        ctx.lineWidth = 3.5;
-        ctx.beginPath();
-        ctx.moveTo(drone.x, drone.y);
-        ctx.lineTo(drone.nextTarget.x, drone.nextTarget.y);
-        ctx.stroke();
+
+        if (drone.isCurved) {
+          // Render Curved Laser Arc
+          ctx.setLineDash([10, 6]);
+          ctx.lineDashOffset = -performance.now() / 25;
+          ctx.strokeStyle = drone.color;
+          ctx.lineWidth = 3.5;
+
+          ctx.beginPath();
+          ctx.moveTo(drone.startPoint.x, drone.startPoint.y);
+          ctx.quadraticCurveTo(drone.controlPoint.x, drone.controlPoint.y, drone.endPoint.x, drone.endPoint.y);
+          ctx.stroke();
+        } else {
+          // Linear laser
+          ctx.setLineDash([10, 6]);
+          ctx.lineDashOffset = -performance.now() / 25;
+          ctx.strokeStyle = drone.color;
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.moveTo(drone.x, drone.y);
+          ctx.lineTo(drone.nextTarget.x, drone.nextTarget.y);
+          ctx.stroke();
+        }
 
         // Target Reticle with rotating crosshairs
         const rx = drone.nextTarget.x;
@@ -933,13 +1024,13 @@ class Game {
         }
         ctx.restore();
 
-        // Red target warning text
+        // Target warning text
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 12px "Courier New", monospace';
         ctx.fillStyle = drone.color;
-        ctx.fillText('TARGET LOCKED', rx, ry + 36);
+        ctx.fillText(drone.isHunter ? 'CURVED DASH INCOMING' : 'TARGET LOCKED', rx, ry + 36);
         ctx.restore();
 
         ctx.restore();
@@ -987,6 +1078,17 @@ class Game {
       ctx.beginPath();
       ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // Render Drone Dash Trails
+    for (const dtr of this.droneTrail) {
+      ctx.save();
+      ctx.fillStyle = dtr.color;
+      ctx.globalAlpha = Math.max(0, dtr.alpha);
+      ctx.beginPath();
+      ctx.arc(dtr.x, dtr.y, dtr.radius, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
@@ -1059,7 +1161,7 @@ class Game {
       ctx.save();
       const droneColor = this.empTimer > 0 ? '#b300b3' : drone.color;
       ctx.shadowColor = droneColor;
-      ctx.shadowBlur = 22;
+      ctx.shadowBlur = drone.isDashing ? 32 : 22;
 
       ctx.fillStyle = droneColor;
       ctx.beginPath();
@@ -1067,7 +1169,7 @@ class Game {
       ctx.fill();
 
       // Drone inner eye
-      ctx.fillStyle = drone.state === 'WARNING' ? '#ffffff' : '#280008';
+      ctx.fillStyle = (drone.state === 'WARNING' || drone.isDashing) ? '#ffffff' : '#280008';
       ctx.beginPath();
       ctx.arc(drone.x, drone.y, drone.radius * 0.5, 0, Math.PI * 2);
       ctx.fill();
@@ -1254,30 +1356,30 @@ class Game {
     ctx.fillStyle = threatColors[threat] || '#00ffcc';
     ctx.fillText(threatLabels[threat], 365, 27);
 
-    // 4. SURVIVAL TIME COUNTDOWN
-    const mins = Math.floor(this.survivalTimer / 60);
-    const secs = Math.floor(this.survivalTimer % 60);
+    // 4. SURVIVAL TIME (Counts UP in Endless Mode)
+    const mins = Math.floor(this.survivalTime / 60);
+    const secs = Math.floor(this.survivalTime % 60);
     const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     ctx.font = 'bold 20px "Courier New", monospace';
-    ctx.fillStyle = this.survivalTimer < 30 ? '#ff1744' : '#00f0ff';
-    ctx.fillText(`TIME: ${timeStr}`, 550, 27);
+    ctx.fillStyle = '#00f0ff';
+    ctx.fillText(`SURVIVED: ${timeStr}`, 550, 27);
 
     // 5. SPACE DASH STATUS
     ctx.font = 'bold 13px "Segoe UI", Arial, sans-serif';
     if (this.player.dashCooldown <= 0) {
       ctx.fillStyle = '#00ffcc';
-      ctx.fillText('SPACE: READY', 690, 27);
+      ctx.fillText('SPACE: READY', 715, 27);
     } else {
       ctx.fillStyle = '#64748b';
       const pct = Math.ceil(this.player.dashCooldown);
-      ctx.fillText(`SPACE: ${pct}s`, 690, 27);
+      ctx.fillText(`SPACE: ${pct}s`, 715, 27);
     }
 
     // 6. COMBO MULTIPLIER
     if (this.combo > 1) {
       ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`x${this.combo}`, 795, 27);
+      ctx.fillText(`x${this.combo}`, 820, 27);
     }
 
     // 7. SCORE & HIGH SCORE
@@ -1355,7 +1457,7 @@ class Game {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#8bf0ff';
     ctx.font = '22px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('Futuristic 2D Adaptive Arcade Survival', this.width / 2, centerY - 128);
+    ctx.fillText('Endless Adaptive Cyber Survival Arena', this.width / 2, centerY - 128);
 
     // Best Score Display with Gold Trophy Accent
     if (this.highScore > 0) {
@@ -1415,7 +1517,7 @@ class Game {
     // Feature note
     ctx.font = '14px "Courier New", monospace';
     ctx.fillStyle = '#94a3b8';
-    ctx.fillText('★ 5 Escalating Threat Levels ★ Adaptive Drone AI ★ 4 Seeker Classes', boxX + 28, boxY + 215);
+    ctx.fillText('★ ENDLESS SURVIVAL ★ Curved Pursuit Dashes ★ 4 Seeker Drone Classes', boxX + 28, boxY + 215);
 
     // Blinking "Press Z to start" (Rule 4 requirement)
     if (Math.floor(performance.now() / 500) % 2 === 0) {
@@ -1453,25 +1555,15 @@ class Game {
     ctx.textAlign = 'center';
     const centerY = this.height / 2;
 
-    if (this.gameWon) {
-      ctx.shadowColor = '#00ffcc';
-      ctx.shadowBlur = 24;
-      ctx.fillStyle = '#00ffcc';
-      ctx.font = 'bold 50px "Segoe UI", Arial, sans-serif';
-      ctx.fillText('SURVIVAL COMPLETE!', this.width / 2, centerY - 140);
-      ctx.font = '22px "Segoe UI", Arial, sans-serif';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText('You conquered all 5 security threat levels!', this.width / 2, centerY - 95);
-    } else {
-      ctx.shadowColor = '#ff1744';
-      ctx.shadowBlur = 24;
-      ctx.fillStyle = '#ff1744';
-      ctx.font = 'bold 50px "Segoe UI", Arial, sans-serif';
-      ctx.fillText('SYSTEM PURGED', this.width / 2, centerY - 140);
-      ctx.font = '22px "Segoe UI", Arial, sans-serif';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText('Integrity collapsed under drone patrol.', this.width / 2, centerY - 95);
-    }
+    ctx.shadowColor = '#ff1744';
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = '#ff1744';
+    ctx.font = 'bold 52px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('SYSTEM PURGED', this.width / 2, centerY - 140);
+
+    ctx.font = '22px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('Your cyber core collapsed under the curved drone hunt.', this.width / 2, centerY - 95);
     ctx.restore();
 
     // Stats Box
@@ -1482,7 +1574,7 @@ class Game {
 
     ctx.save();
     ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = this.gameWon ? '#00ffcc' : '#ff1744';
+    ctx.strokeStyle = '#ff1744';
     ctx.lineWidth = 2;
     ctx.fillRect(sBoxX, sBoxY, sBoxW, sBoxH);
     ctx.strokeRect(sBoxX, sBoxY, sBoxW, sBoxH);
@@ -1495,16 +1587,15 @@ class Game {
     if (this.isNewRecord) {
       ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffd700';
-      ctx.fillText('★ NEW HIGH SCORE RECORD! ★', this.width / 2, sBoxY + 80);
+      ctx.fillText('★ NEW ALL-TIME RECORD! ★', this.width / 2, sBoxY + 80);
     } else {
       ctx.font = '19px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#94a3b8';
       ctx.fillText(`ALL-TIME BEST: ${this.highScore}`, this.width / 2, sBoxY + 80);
     }
 
-    const timeSurvived = Math.floor(150.0 - this.survivalTimer);
-    const m = Math.floor(timeSurvived / 60);
-    const s = timeSurvived % 60;
+    const m = Math.floor(this.survivalTime / 60);
+    const s = Math.floor(this.survivalTime % 60);
     ctx.font = '20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#00f0ff';
     ctx.fillText(`Time Survived: ${m}m ${s}s  |  Cores: ${this.coresCollected}`, this.width / 2, sBoxY + 120);
