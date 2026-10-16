@@ -1,9 +1,10 @@
 // webcam.js — Adaptive AI Vision Face & Gesture Controller for Neon Core: AI Arena
 // Features self-training / adaptive face calibration specifically tuned to the player's face geometry.
 // Automatically selects "HP True Vision FHD Camera".
-// Maps:
+// Natural Face Mode: Face stays 100% natural as per the player (no lines/meshes painted on face).
+// Controls:
+// - Turn left / right (Yaw)       -> Left / Right Arrow (Inverted for natural intuitive mirror movement)
 // - Head up / down (Pitch)       -> Up / Down Arrow (held continuously)
-// - Turn left / right (Yaw)       -> Left / Right Arrow (held continuously)
 // - Open mouth                   -> Z (held continuously, fresh trigger on open)
 // - Blink / eyes closed          -> Space (held continuously, triggers 2.0s burst dash)
 
@@ -22,10 +23,16 @@
       this.cvLoopStarted = false;
       this.calibTimer = null;
 
+      // Offscreen canvas for zero-overhead background CV analysis (keeps face 100% natural & unpainted)
+      this.offCanvas = document.createElement('canvas');
+      this.offCanvas.width = 160;
+      this.offCanvas.height = 120;
+      this.offCtx = this.offCanvas.getContext('2d', { willReadFrequently: true });
+
       // Personalized Calibration State ("Training on player's face")
       this.isCalibrating = true;
       this.calibSamples = [];
-      this.calibTargetCount = 30; // ~0.8-1.0s of frames
+      this.calibTargetCount = 28; // ~0.7-0.9s of frames
       this.calibrated = false;
 
       // Baselines (personalized to the player's resting face)
@@ -53,8 +60,8 @@
       // Relative Thresholds (Dynamically tuned to the player's face)
       this.mouthOpenThreshold = 0.22;
       this.blinkThreshold = 0.18;
-      this.deadzoneX = 0.05;
-      this.deadzoneY = 0.05;
+      this.deadzoneX = 0.045;
+      this.deadzoneY = 0.045;
 
       // Action State
       this.isMouthOpen = false;
@@ -166,14 +173,14 @@
         this.statusDot.style.boxShadow = '0 0 8px #ffea00';
       }
 
-      // Safeguard timer: Guarantees training finishes cleanly within 1.6s regardless of network or lighting
+      // Safeguard timer: Guarantees training finishes cleanly within 1.5s
       if (this.calibTimer) clearTimeout(this.calibTimer);
       this.calibTimer = setTimeout(() => {
         if (this.isCalibrating) {
           console.log('[AI Vision] Calibration auto-finalizing via timer safeguard...');
           this._finalizeCalibration();
         }
-      }, 1600);
+      }, 1500);
     }
 
     _finalizeCalibration() {
@@ -220,7 +227,7 @@
         if (this.hudNotice && !this.isCalibrating) {
           this.hudNotice.style.display = 'none';
         }
-      }, 400);
+      }, 350);
 
       console.log('[AI Vision] Training complete! Personalized baseline:', this.baseline);
     }
@@ -343,7 +350,6 @@
     }
 
     _initMediaPipe() {
-      // Check if MediaPipe FaceMesh is already loaded via <head>
       const checkAndSetup = () => {
         if (window.FaceMesh) {
           try {
@@ -363,9 +369,8 @@
             if (this.faceMesh.initialize) {
               this.faceMesh.initialize().catch(() => {});
             }
-            console.log('[AI Vision] Neural FaceMesh Engine initialized in background');
           } catch (e) {
-            console.warn('[AI Vision] Using native canvas CV engine:', e);
+            console.warn('[AI Vision] Native CV engine handling tracking:', e);
           }
         } else {
           setTimeout(checkAndSetup, 500);
@@ -375,21 +380,23 @@
     }
 
     _onFaceMeshResults(results) {
-      if (!this.canvas || !this.ctx) return;
-      const w = this.canvas.width;
-      const h = this.canvas.height;
       const now = performance.now();
+
+      // Keep visible canvas completely clear so the face stays 100% natural
+      if (this.ctx && this.canvas) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      }
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         if (!this.useMediaPipe) {
           this.useMediaPipe = true;
-          console.log('[AI Vision] Upgraded to high-precision Neural FaceMesh!');
+          console.log('[AI Vision] Neural FaceMesh active (Natural Face Mode)');
         }
 
         const flm = results.multiFaceLandmarks[0];
 
         // 1. Raw Coordinates Extraction
-        const rawNoseX = 1.0 - flm[1].x; // Mirrored for natural steering
+        const rawNoseX = 1.0 - flm[1].x;
         const rawNoseY = flm[1].y;
 
         // Yaw calculation: Turn Left / Turn Right
@@ -414,7 +421,7 @@
                          Math.max(0.001, Math.hypot(flm[362].x - flm[263].x, flm[362].y - flm[263].y));
         const rawEar = (earLeft + earRight) / 2.0;
 
-        // 2. Exponential Moving Average Smoothing (Anti-Jitter)
+        // 2. Exponential Moving Average Smoothing
         const alpha = 0.35;
         this.smooth.noseX = this.smooth.noseX * (1 - alpha) + rawNoseX * alpha;
         this.smooth.noseY = this.smooth.noseY * (1 - alpha) + rawNoseY * alpha;
@@ -442,12 +449,13 @@
           return;
         }
 
-        // 4. Relative Head Steering from Personalized Neutral Center
+        // 4. Relative Head Steering (Inverted Left/Right for natural intuitive movement)
         const deltaX = (this.smooth.noseX - this.baseline.noseX) + (this.smooth.yaw - this.baseline.yaw) * 0.45;
         const deltaY = rawPitch - this.baseline.noseY;
 
-        const left = deltaX < -this.deadzoneX;
-        const right = deltaX > this.deadzoneX;
+        // Left / Right direction mapping corrected to match player intention
+        const left = deltaX > this.deadzoneX;
+        const right = deltaX < -this.deadzoneX;
         const up = deltaY < -this.deadzoneY;
         const down = deltaY > this.deadzoneY;
 
@@ -492,10 +500,6 @@
             this.isEyeClosed = false;
           }
         }
-
-        // Draw Interactive Neural HUD Overlay
-        this.ctx.clearRect(0, 0, w, h);
-        this._drawNeuralHUD(flm, w, h, deltaX, deltaY);
       } else {
         if (!this.isCalibrating) {
           this._updateSteering(false, false, false, false);
@@ -505,101 +509,18 @@
       this._updateMetersDisplay();
     }
 
-    _drawNeuralHUD(flm, w, h, deltaX, deltaY) {
-      const ctx = this.ctx;
-      ctx.save();
-
-      // 1. Draw Lip Landmarks in Neon Green
-      ctx.strokeStyle = this.isMouthOpen ? '#00ff88' : 'rgba(0, 255, 136, 0.5)';
-      ctx.lineWidth = this.isMouthOpen ? 2.5 : 1.2;
-      const lipIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78];
-      ctx.beginPath();
-      lipIndices.forEach((idx, i) => {
-        const pt = flm[idx];
-        const x = (1.0 - pt.x) * w;
-        const y = pt.y * h;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.closePath();
-      ctx.stroke();
-
-      // 2. Draw Eye Contours in Neon Cyan
-      ctx.strokeStyle = this.isEyeClosed ? '#00ffcc' : 'rgba(0, 240, 255, 0.5)';
-      ctx.lineWidth = this.isEyeClosed ? 2.5 : 1.2;
-      const leftEyeIndices = [33, 160, 158, 133, 153, 144];
-      const rightEyeIndices = [362, 385, 387, 263, 373, 380];
-
-      [leftEyeIndices, rightEyeIndices].forEach(indices => {
-        ctx.beginPath();
-        indices.forEach((idx, i) => {
-          const pt = flm[idx];
-          const x = (1.0 - pt.x) * w;
-          const y = pt.y * h;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.closePath();
-        ctx.stroke();
-      });
-
-      // 3. Neutral Center Crosshair & Deadzone
-      const cx = w * 0.5;
-      const cy = h * 0.5;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cx - 15, cy); ctx.lineTo(cx + 15, cy);
-      ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy + 15);
-      ctx.stroke();
-
-      // Deadzone box
-      const dw = this.deadzoneX * w * 2.0;
-      const dh = this.deadzoneY * h * 2.0;
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
-      ctx.setLineDash([3, 3]);
-      ctx.strokeRect(cx - dw / 2, cy - dh / 2, dw, dh);
-      ctx.setLineDash([]);
-
-      // Head cursor dot
-      const hx = cx + deltaX * w * 2.0;
-      const hy = cy + deltaY * h * 2.0;
-      const inDead = Math.abs(deltaX) <= this.deadzoneX && Math.abs(deltaY) <= this.deadzoneY;
-
-      ctx.fillStyle = inDead ? '#00f0ff' : '#ffea00';
-      ctx.beginPath();
-      ctx.arc(hx, hy, inDead ? 5 : 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Active Mouth Open / Dash Banner
-      if (this.isMouthOpen) {
-        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = '#00ff88';
-        ctx.textAlign = 'center';
-        ctx.fillText('MOUTH OPEN [Z HELD]', cx, h - 12);
-      } else if (this.isEyeClosed) {
-        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = '#00f0ff';
-        ctx.textAlign = 'center';
-        ctx.fillText('EYES CLOSED [DASH HELD]', cx, h - 12);
-      }
-
-      ctx.restore();
-    }
-
     _cvLoop() {
       if (!this.isTracking || !this.video || this.video.paused || this.video.ended) {
         requestAnimationFrame(() => this._cvLoop());
         return;
       }
 
-      // Check video stream readiness
       if (this.video.readyState < 2) {
         requestAnimationFrame(() => this._cvLoop());
         return;
       }
 
-      // 1. Dispatch to MediaPipe asynchronously if initialized (never blocking)
+      // 1. Dispatch to MediaPipe asynchronously if initialized (non-blocking)
       if (this.faceMesh && !this.mediaPipeSending) {
         this.mediaPipeSending = true;
         this.faceMesh.send({ image: this.video })
@@ -607,39 +528,39 @@
           .catch(() => { this.mediaPipeSending = false; });
       }
 
-      // 2. If MediaPipe is active, it handles rendering in _onFaceMeshResults
+      // 2. If MediaPipe is active, it handles tracking in _onFaceMeshResults
       if (this.useMediaPipe) {
         requestAnimationFrame(() => this._cvLoop());
         return;
       }
 
-      // 3. High-Speed Illumination-Invariant Native CV Engine (Runs immediately, zero network dependencies)
-      const w = this.canvas.width;
-      const h = this.canvas.height;
+      // 3. High-Speed Offscreen Native CV Engine (Leaves on-screen video completely natural & unpainted)
+      const w = 160;
+      const h = 120;
       const now = performance.now();
 
-      // Draw mirrored video for natural player feedback
-      this.ctx.save();
-      this.ctx.clearRect(0, 0, w, h);
-      this.ctx.drawImage(this.video, 0, 0, w, h);
-      const frameData = this.ctx.getImageData(0, 0, w, h);
+      // Keep on-screen canvas completely transparent
+      if (this.ctx && this.canvas) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      }
+
+      // Draw frame to hidden offscreen canvas for computer vision analysis
+      this.offCtx.drawImage(this.video, 0, 0, w, h);
+      const frameData = this.offCtx.getImageData(0, 0, w, h);
       const data = frameData.data;
-      this.ctx.restore();
 
-      // Robust skin & face centroid detection (Works in dim rooms, cool backlight, and all ethnicities)
+      // Illumination-invariant face centroid detection
       let sumX = 0, sumY = 0, skinCount = 0;
-      let minX = w, maxX = 0, minY = h, maxY = 0;
-      const step = 4;
+      const step = 2;
 
-      for (let y = 16; y < h - 16; y += step) {
-        for (let x = 16; x < w - 16; x += step) {
+      for (let y = 8; y < h - 8; y += step) {
+        for (let x = 8; x < w - 8; x += step) {
           const idx = (y * w + x) * 4;
           const r = data[idx];
           const g = data[idx + 1];
           const b = data[idx + 2];
           const total = r + g + b;
 
-          // Illumination-invariant skin & face heuristic
           const isSkin = (
             total > 45 &&
             r > 24 && g > 16 && b > 12 &&
@@ -649,7 +570,6 @@
           );
 
           if (isSkin) {
-            // Center-weighted bias towards the player's face
             const dx = (x - w / 2) / (w / 2);
             const dy = (y - h / 2) / (h / 2);
             const distSq = dx * dx + dy * dy;
@@ -658,17 +578,12 @@
             sumX += x * weight;
             sumY += y * weight;
             skinCount += weight;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
           }
         }
       }
 
-      // Fallback centroid to center if camera is dark or warming up
       let rawCx, cy;
-      if (skinCount > 25) {
+      if (skinCount > 20) {
         rawCx = sumX / skinCount;
         cy = sumY / skinCount;
       } else {
@@ -676,21 +591,19 @@
         cy = h / 2;
       }
 
-      // Mirrored X for mirror-camera steering
       const cx = w - rawCx;
 
-      // Smooth centroid tracking
       this.smooth.noseX = this.smooth.noseX * 0.70 + (cx / w) * 0.30;
       this.smooth.noseY = this.smooth.noseY * 0.70 + (cy / h) * 0.30;
 
       // Sample mouth region (Lower center of detected face)
-      const mouthY = Math.min(h - 15, Math.round(cy + 25));
+      const mouthY = Math.min(h - 8, Math.round(cy + 13));
       const mouthX = Math.round(rawCx);
       let mouthDarkPixels = 0;
       let mouthTotalPixels = 0;
 
-      for (let my = mouthY - 8; my <= mouthY + 8; my += 2) {
-        for (let mx = mouthX - 16; mx <= mouthX + 16; mx += 2) {
+      for (let my = mouthY - 4; my <= mouthY + 4; my += 2) {
+        for (let mx = mouthX - 8; mx <= mouthX + 8; mx += 2) {
           if (mx >= 0 && mx < w && my >= 0 && my < h) {
             const idx = (my * w + mx) * 4;
             const luma = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
@@ -703,15 +616,15 @@
       this.smooth.mouthDark = this.smooth.mouthDark * 0.70 + mouthDarkRatio * 0.30;
 
       // Sample eye region for blink detection
-      const eyeY = Math.max(10, Math.round(cy - 18));
-      const eyeX1 = Math.round(rawCx - 20);
-      const eyeX2 = Math.round(rawCx + 20);
+      const eyeY = Math.max(5, Math.round(cy - 9));
+      const eyeX1 = Math.round(rawCx - 10);
+      const eyeX2 = Math.round(rawCx + 10);
       let eyeContrast = 0;
       let eyeSamples = 0;
 
-      for (let ey = eyeY - 6; ey <= eyeY + 6; ey += 2) {
+      for (let ey = eyeY - 3; ey <= eyeY + 3; ey += 2) {
         for (let ex of [eyeX1, eyeX2]) {
-          for (let offset = -8; offset <= 8; offset += 2) {
+          for (let offset = -4; offset <= 4; offset += 2) {
             const px = ex + offset;
             if (px > 0 && px < w - 1 && ey >= 0 && ey < h) {
               const idx1 = (ey * w + px) * 4;
@@ -747,12 +660,13 @@
           this._finalizeCalibration();
         }
       } else {
-        // Relative Head Steering
+        // Relative Head Steering (Inverted Left/Right for natural intuitive movement)
         const deltaX = (cx / w) - this.baseline.noseX;
         const deltaY = (cy / h) - this.baseline.noseY;
 
-        const left = deltaX < -this.deadzoneX;
-        const right = deltaX > this.deadzoneX;
+        // Left / Right direction mapping corrected to match player intention
+        const left = deltaX > this.deadzoneX;
+        const right = deltaX < -this.deadzoneX;
         const up = deltaY < -this.deadzoneY;
         const down = deltaY > this.deadzoneY;
 
@@ -800,67 +714,10 @@
             this.isEyeClosed = false;
           }
         }
-
-        // Render Native CV Visual Feedback
-        this._drawNativeHUD(w, h, cx, cy, deltaX, deltaY);
       }
 
       this._updateMetersDisplay();
       requestAnimationFrame(() => this._cvLoop());
-    }
-
-    _drawNativeHUD(w, h, cx, cy, deltaX, deltaY) {
-      const ctx = this.ctx;
-      ctx.save();
-
-      // Neutral Center Crosshairs
-      const centerX = w * 0.5;
-      const centerY = h * 0.5;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(centerX - 15, centerY); ctx.lineTo(centerX + 15, centerY);
-      ctx.moveTo(centerX, centerY - 15); ctx.lineTo(centerX, centerY + 15);
-      ctx.stroke();
-
-      // Deadzone Box
-      const dw = this.deadzoneX * w * 2.0;
-      const dh = this.deadzoneY * h * 2.0;
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
-      ctx.setLineDash([3, 3]);
-      ctx.strokeRect(centerX - dw / 2, centerY - dh / 2, dw, dh);
-      ctx.setLineDash([]);
-
-      // Head Position Cursor
-      const hx = centerX + deltaX * w * 2.0;
-      const hy = centerY + deltaY * h * 2.0;
-      const inDead = Math.abs(deltaX) <= this.deadzoneX && Math.abs(deltaY) <= this.deadzoneY;
-
-      ctx.fillStyle = inDead ? '#00f0ff' : '#ffea00';
-      ctx.beginPath();
-      ctx.arc(hx, hy, inDead ? 5 : 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Face tracking target brackets
-      ctx.strokeStyle = '#00ff88';
-      ctx.lineWidth = 1.5;
-      const bw = 50, bh = 60;
-      ctx.strokeRect(cx - bw / 2, cy - bh / 2, bw, bh);
-
-      // Active Gesture Banner
-      if (this.isMouthOpen) {
-        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = '#00ff88';
-        ctx.textAlign = 'center';
-        ctx.fillText('MOUTH OPEN [Z HELD]', centerX, h - 12);
-      } else if (this.isEyeClosed) {
-        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = '#00f0ff';
-        ctx.textAlign = 'center';
-        ctx.fillText('EYES CLOSED [DASH HELD]', centerX, h - 12);
-      }
-
-      ctx.restore();
     }
 
     _updateSteering(up, down, left, right) {

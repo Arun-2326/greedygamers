@@ -214,8 +214,8 @@ class GestureBridge:
                     d_right = abs(flm[1].x - flm[454].x)
                     yaw_ratio = (d_left - d_right) / max(0.001, d_left + d_right)
 
-                    turn_left = (yaw_ratio < -0.16) or (nose_x < self.dz_x_min)
-                    turn_right = (yaw_ratio > 0.16) or (nose_x > self.dz_x_max)
+                    turn_left = (yaw_ratio > 0.16) or (nose_x > self.dz_x_max)
+                    turn_right = (yaw_ratio < -0.16) or (nose_x < self.dz_x_min)
 
                     # Pitch: Head Up / Head Down
                     eye_y = flm[168].y
@@ -230,9 +230,6 @@ class GestureBridge:
                     target_keys['left'] = turn_left
                     target_keys['right'] = turn_right
 
-                    # Draw Head Cursor
-                    cv2.circle(frame, (int(nose_x * w), int(nose_y * h)), 8, (0, 255, 255), -1)
-
                     # ---------------- Mouth Aspect Ratio (MAR) -> Z Key ----------------
                     lip_top = flm[13]
                     lip_bottom = flm[14]
@@ -242,10 +239,6 @@ class GestureBridge:
                     lip_dist = math.hypot(lip_top.x - lip_bottom.x, lip_top.y - lip_bottom.y)
                     mouth_width = math.hypot(mouth_left.x - mouth_right.x, mouth_left.y - mouth_right.y)
                     mar = lip_dist / max(0.001, mouth_width)
-
-                    # Draw Mouth Indicator Dots
-                    cv2.circle(frame, (int((1.0 - lip_top.x) * w), int(lip_top.y * h)), 3, (0, 255, 255), -1)
-                    cv2.circle(frame, (int((1.0 - lip_bottom.x) * w), int(lip_bottom.y * h)), 3, (0, 255, 255), -1)
 
                     # ---------------- Calibration Phase ----------------
                     if self.is_calibrating:
@@ -282,11 +275,6 @@ class GestureBridge:
                     ear_left = math.hypot(flm[159].x - flm[145].x, flm[159].y - flm[145].y) / max(0.001, math.hypot(flm[33].x - flm[133].x, flm[33].y - flm[133].y))
                     ear_right = math.hypot(flm[386].x - flm[374].x, flm[386].y - flm[374].y) / max(0.001, math.hypot(flm[362].x - flm[263].x, flm[362].y - flm[263].y))
                     ear = (ear_left + ear_right) / 2.0
-
-                    cv2.circle(frame, (int((1.0 - flm[159].x) * w), int(flm[159].y * h)), 3, (255, 0, 255), -1)
-                    cv2.circle(frame, (int((1.0 - flm[145].x) * w), int(flm[145].y * h)), 3, (255, 0, 255), -1)
-                    cv2.circle(frame, (int((1.0 - flm[386].x) * w), int(flm[386].y * h)), 3, (255, 0, 255), -1)
-                    cv2.circle(frame, (int((1.0 - flm[374].x) * w), int(flm[374].y * h)), 3, (255, 0, 255), -1)
 
                     dash_remaining = max(0.0, self.dash_cooldown - (now - self.last_dash_time))
                     eyes_closed = (ear < self.blink_threshold)
