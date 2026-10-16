@@ -344,12 +344,6 @@ class Game {
 
     // PLAYING STATE (Endless Mode)
     if (this.state === 'PLAYING') {
-      // Toggle Pause with Z (AGENTS.md Rule 1 compliant: ONLY allowed 6 keys)
-      if (window.input.consumeZ()) {
-        this.state = 'PAUSED';
-        return;
-      }
-
       // Survival time counts UP endlessly
       this.survivalTime += dt;
 
@@ -1565,12 +1559,7 @@ class Game {
       ctx.fillText(`[SPACE] DASH: ${pct}s`, 615, 27);
     }
 
-    // 6. PAUSE HINT
-    ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillText('[Z] PAUSE', 785, 27);
-
-    // 7. COMBO MULTIPLIER
+    // 6. COMBO MULTIPLIER
     if (this.combo > 1) {
       ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffd700';
@@ -1701,7 +1690,7 @@ class Game {
     this._drawKeycap(ctx, boxX + 28, boxY + 104, 120, 34, 'OPEN MOUTH', '#00ffcc');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Open Mouth (Confirm / Start Game / Pause / Resume / Restart)', boxX + 160, boxY + 126);
+    ctx.fillText('Open Mouth or Press Z (Start Game / Confirm / Restart)', boxX + 160, boxY + 126);
 
     // Visual Keycap Cluster 3: BLINK / SPACE KEY
     this._drawKeycap(ctx, boxX + 28, boxY + 150, 120, 34, 'BLINK EYES', '#ffea00');

@@ -10,7 +10,7 @@ Controls:
     - Left  -> ArrowLeft
     - Right -> ArrowRight
 - Facial Expressions:
-    - MOUTH OPEN -> Press Z (Start, Confirm, Pause, Resume, Restart)
+    - MOUTH OPEN -> Press Z (Start Game, Confirm, Restart)
     - EYE BLINK  -> Press Space (Neon Surge Dash, 2.0s cooldown)
 - Hand Gesture Backups:
     - Fist / Pinch -> Z
@@ -170,7 +170,7 @@ class GestureBridge:
         print("  NEON CORE — AI VISION MULTI-GESTURE CONTROLLER BRIDGE")
         print("=" * 70)
         print(" [▲/▼/◀/▶] Move hand outside center box to steer in that direction")
-        print(" [Z KEY]    OPEN MOUTH -> Start Game / Confirm / Resume / Restart")
+        print(" [Z KEY]    OPEN MOUTH -> Start Game / Confirm / Restart")
         print(" [SPACE]    BLINK EYES -> Neon Surge Dash (2.0s cooldown)")
         print(" [BACKUPS]  Closed Fist = Z  |  Spread Palm = Space Dash")
         print(" [EXIT]     Press 'q' or 'Esc' in camera window to quit")
