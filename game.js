@@ -126,10 +126,10 @@ class Game {
 
   _initDrones() {
     this.drones = [
-      this._createDrone('Scout Alpha', this._getRoute1(), 112, 0, false, '#ff1744', 1),
-      this._createDrone('Hunter Omega', this._getRoute2(), 112, 2, true, '#ff0055', 1),
-      this._createDrone('Viper Phantom', this._getRoute3(), 125, 1, true, '#c000ff', 4),
-      this._createDrone('Titan Overlord', this._getRoute4(), 130, 0, true, '#ff8800', 5)
+      this._createDrone('Scout Alpha', 'CURRENT', this._getRoute1(), 112, 0, true, '#ff1744', 1),
+      this._createDrone('Hunter Omega', 'PREDICTIVE', this._getRoute2(), 112, 2, true, '#ff0055', 1),
+      this._createDrone('Viper Phantom', 'CURRENT', this._getRoute3(), 125, 1, true, '#c000ff', 3),
+      this._createDrone('Titan Overlord', 'PREDICTIVE', this._getRoute4(), 130, 0, true, '#ff8800', 4)
     ];
   }
 
@@ -177,9 +177,10 @@ class Game {
     }
   }
 
-  _createDrone(name, baseRoute, speed, startIdx, isHunter, color, minLevel) {
+  _createDrone(name, role, baseRoute, speed, startIdx, isHunter, color, minLevel) {
     return {
       name: name,
+      role: role, // 'CURRENT' (tracks where player is) or 'PREDICTIVE' (tracks where player will go)
       isHunter: isHunter,
       color: color,
       minLevel: minLevel,
@@ -195,6 +196,7 @@ class Game {
       isTracking: false,
       isDashing: false,
       rewardedNearMiss: false,
+      targetLabel: '',
       // Curved trajectory parameters
       isCurved: false,
       startPoint: { x: baseRoute[startIdx].x, y: baseRoute[startIdx].y },
@@ -498,11 +500,22 @@ class Game {
           const dist = Math.hypot(this.player.x - drone.x, this.player.y - drone.y);
           if (dist < this.player.radius + drone.radius + 40 && dist > this.player.radius + drone.radius) {
             drone.rewardedNearMiss = true;
-            const pts = drone.isDashing ? 250 : 150;
-            this.score += pts;
-            this._addFloatingText(drone.isDashing ? 'DASH EVADED! +250' : 'CLOSE CALL! +150', this.player.x, this.player.y - 30, '#00ffcc');
-            if (window.sound) window.sound.playCloseCall();
-            this._createRepairEffect(this.player.x, this.player.y);
+            // Check if multiple hunters are actively engaged
+            const activeHunters = this.drones.filter(d => (d.state === 'DASHING' || d.isTracking) && d.minLevel <= currentThreat).length;
+            if (activeHunters >= 2) {
+              const pts = 400;
+              this.score += pts;
+              this._addFloatingText('PINCER EVADED! +400', this.player.x, this.player.y - 32, '#ff00ff');
+              this.screenShake = 4;
+              if (window.sound) window.sound.playCloseCall();
+              this._createRepairEffect(this.player.x, this.player.y);
+            } else {
+              const pts = drone.isDashing ? 250 : 150;
+              this.score += pts;
+              this._addFloatingText(drone.isDashing ? 'DASH EVADED! +250' : 'CLOSE CALL! +150', this.player.x, this.player.y - 30, '#00ffcc');
+              if (window.sound) window.sound.playCloseCall();
+              this._createRepairEffect(this.player.x, this.player.y);
+            }
           }
         }
 
@@ -762,12 +775,34 @@ class Game {
       drone.isTracking = true;
       drone.isCurved = true;
 
-      // Predicted player coordinate
-      const pPredictX = this.player.x + (this.player.x - this.player.prevX) * 14;
-      const pPredictY = this.player.y + (this.player.y - this.player.prevY) * 14;
+      let targetX, targetY;
 
-      const targetX = Math.max(50, Math.min(this.width - 50, pPredictX));
-      const targetY = Math.max(90, Math.min(this.height - 50, pPredictY));
+      if (drone.role === 'PREDICTIVE') {
+        // PREDICTIVE INTERCEPT: Anticipate where player will go based on velocity & heading
+        const pVelX = this.player.x - this.player.prevX;
+        const pVelY = this.player.y - this.player.prevY;
+        const speed = Math.hypot(pVelX, pVelY);
+
+        if (speed > 0.4) {
+          // Player is actively moving: project forward 22 frames
+          targetX = this.player.x + pVelX * 22;
+          targetY = this.player.y + pVelY * 22;
+        } else {
+          // Player paused / stationary: intercept ahead in their ship facing angle
+          targetX = this.player.x + Math.cos(this.player.angle) * 160;
+          targetY = this.player.y + Math.sin(this.player.angle) * 160;
+        }
+        drone.targetLabel = 'PREDICTED ESCAPE LOCKED';
+      } else {
+        // CURRENT POSITION PURSUIT: Flush player directly out of their current coordinates
+        targetX = this.player.x;
+        targetY = this.player.y;
+        drone.targetLabel = 'CURRENT TARGET LOCKED';
+      }
+
+      // Constrain inside safe arena boundaries
+      targetX = Math.max(50, Math.min(this.width - 50, targetX));
+      targetY = Math.max(90, Math.min(this.height - 50, targetY));
 
       drone.endPoint = { x: targetX, y: targetY };
       drone.nextTarget = drone.endPoint;
@@ -783,8 +818,8 @@ class Game {
       const nX = -vY / vLen;
       const nY = vX / vLen;
 
-      // Random left/right arc flank
-      const bow = (Math.random() > 0.5 ? 1 : -1) * (80 + Math.random() * 90);
+      // Flank curvature: Alternate left/right bowing to create sweeping pincer trajectories
+      const bow = (Math.random() > 0.5 ? 1 : -1) * (85 + Math.random() * 80);
       drone.controlPoint = {
         x: Math.max(40, Math.min(this.width - 40, midX + nX * bow)),
         y: Math.max(80, Math.min(this.height - 40, midY + nY * bow))
@@ -803,6 +838,7 @@ class Game {
       // PATROL NAVIGATION: Follow circuit with Adaptive AI nudge
       drone.isTracking = false;
       drone.isCurved = false;
+      drone.targetLabel = 'PATROL TELEGRAPH';
 
       drone.currentWaypointIdx = (drone.currentWaypointIdx + 1) % drone.baseRoute.length;
       const nextIdx = (drone.currentWaypointIdx + 1) % drone.baseRoute.length;
@@ -1030,7 +1066,8 @@ class Game {
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 12px "Courier New", monospace';
         ctx.fillStyle = drone.color;
-        ctx.fillText(drone.isHunter ? 'CURVED DASH INCOMING' : 'TARGET LOCKED', rx, ry + 36);
+        const warningLabel = drone.targetLabel || (drone.isHunter ? 'CURVED DASH INCOMING' : 'TARGET LOCKED');
+        ctx.fillText(warningLabel, rx, ry + 36);
         ctx.restore();
 
         ctx.restore();

@@ -55,17 +55,22 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
 
 1. **Endless Survival Mode**:
    - The game no longer ends on a timer cut-off. Survive as long as you can while your `SURVIVED: MM:SS` counter and score climb!
-2. **Curved Pursuit Flanking Arcs**:
-   - Drones no longer track only in straight lines. They calculate **Quadratic Bezier Arcs** that flank around the arena to cut off your escape routes!
-3. **Hunter Speed Dashes**:
-   - Hunter drones telegraph a curved attack vector with a rotating lock-on reticle for 1.25 seconds, then explode forward at **2.4x speed** with crimson shockwaves!
-4. **"Dash Evaded" Adrenaline Reward**:
-   - Slipping past a high-speed charging drone awards `DASH EVADED! +250` bonus score and spark effects!
-5. **5 Escalating Threat Levels & 4 Enemy Classes**:
+2. **Dual-Role Hunter Pincer AI (Current + Predictive)**:
+   - **Current Position Hunters (`Scout Alpha` & `Viper Phantom`)**: Lock directly onto your current coordinates and curve inward in flanking arcs to flush you out.
+   - **Predictive Intercept Hunters (`Hunter Omega` & `Titan Overlord`)**: Calculate your real-time heading and velocity vector to cut off your projected escape path ahead of time!
+   - Together, they execute coordinated **Pincer Traps** designed to raise player heart rate!
+3. **Curved Pursuit Flanking Arcs**:
+   - Drones calculate **Quadratic Bezier Arcs** that flank around the arena with 1.25s telegraphs before striking.
+4. **Hunter Speed Dashes**:
+   - Hunter drones telegraph an attack vector with rotating lock-on reticles (`CURRENT TARGET LOCKED` vs `PREDICTED ESCAPE LOCKED`), then surge forward at **2.4x speed** with crimson shockwaves!
+5. **Adrenaline Evasion Rewards**:
+   - `DASH EVADED! +250`: Dodging a single charging hunter.
+   - `PINCER EVADED! +400`: Slipping through the jaws of multiple converging hunters!
+6. **5 Escalating Threat Levels & 4 Enemy Classes**:
    - **Level 1 (0 – 800 pts)**: Scout Protocol (Perimeter loops + regional AI bias).
    - **Level 2 (800 – 1800 pts)**: Intercept Seekers (Curved predictive tracking).
    - **Level 3 (1800 – 3200 pts)**: Apex Predator (Continuous curved sweeps & hunter dashes).
    - **Level 4 (3200 – 5000 pts)**: Viper Squadron (`Viper Phantom` joins with rapid cross-cutting arcs).
    - **Level 5 (5000+ pts)**: Omega Matrix (`Titan Overlord` joins; all 4 drones execute multi-angle pursuit dashes).
-6. **Procedural Web Audio Heartbeat**:
+7. **Procedural Web Audio Heartbeat**:
    - Accelerating synth pulse that matches the escalating threat level.
