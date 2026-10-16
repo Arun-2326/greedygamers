@@ -226,8 +226,13 @@ class SoundFX {
     if (!this.ctx || !this.enabled) return;
 
     const t = this.ctx.currentTime;
-    // Interval based on threat level: 1.2s -> 0.85s -> 0.6s
-    const interval = threatLevel === 3 ? 0.6 : threatLevel === 2 ? 0.85 : 1.2;
+    // Interval based on threat level 1 to 5
+    const intervals = [1.2, 1.2, 0.9, 0.7, 0.52, 0.38];
+    const freqs = [60, 60, 72, 85, 100, 115];
+    const vols = [0.09, 0.09, 0.13, 0.16, 0.20, 0.24];
+
+    const lvl = Math.min(5, Math.max(1, threatLevel));
+    const interval = intervals[lvl];
 
     if (t - this.lastHeartbeat < interval) return;
     this.lastHeartbeat = t;
@@ -236,12 +241,11 @@ class SoundFX {
     const gain = this.ctx.createGain();
 
     osc.type = 'sine';
-    const freq = threatLevel === 3 ? 90 : threatLevel === 2 ? 75 : 60;
+    const freq = freqs[lvl];
     osc.frequency.setValueAtTime(freq, t);
     osc.frequency.exponentialRampToValueAtTime(30, t + 0.14);
 
-    const vol = threatLevel === 3 ? 0.18 : threatLevel === 2 ? 0.14 : 0.09;
-    gain.gain.setValueAtTime(vol, t);
+    gain.gain.setValueAtTime(vols[lvl], t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
 
     osc.connect(gain);

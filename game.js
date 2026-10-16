@@ -1,5 +1,5 @@
 // game.js — Neon Core: AI Arena
-// Adheres strictly to AGENTS.md rules. Dynamic full-screen resolution and escalating tension.
+// Adheres strictly to AGENTS.md rules. Dynamic full-screen resolution, 5 threat levels, arrow player, pause with Z.
 
 class Game {
   constructor() {
@@ -12,7 +12,7 @@ class Game {
     this.canvas.width = this.width;
     this.canvas.height = this.height;
 
-    this.state = 'TITLE'; // 'TITLE', 'PLAYING', 'GAMEOVER'
+    this.state = 'TITLE'; // 'TITLE', 'PLAYING', 'PAUSED', 'GAMEOVER'
     this.ai = new AdaptiveAI(this.width, this.height, 8, 5);
 
     // High Score Persistence
@@ -24,8 +24,9 @@ class Game {
     this.gameOverTimer = 0; // Rule 2: ignore Z for the first 1s of game-over
     this.gameWon = false;
 
-    // Juice, Tension & Effects
+    // Juice, Tension & Visuals
     this.particles = [];
+    this.ambientParticles = [];
     this.floatingTexts = [];
     this.playerTrail = [];
     this.shockwaves = [];
@@ -34,13 +35,25 @@ class Game {
     this.bannerTimer = 0;
     this.prevThreatLevel = 1;
 
+    // Initialize 40 ambient floating particles for cybernetic atmosphere
+    for (let i = 0; i < 40; i++) {
+      this.ambientParticles.push({
+        x: Math.random() * this.width,
+        y: Math.random() * this.height,
+        radius: 1 + Math.random() * 2,
+        speedY: -0.2 - Math.random() * 0.4,
+        alpha: 0.15 + Math.random() * 0.35,
+        color: Math.random() > 0.5 ? '#00f0ff' : '#ff00aa'
+      });
+    }
+
     // Game stats
     this.score = 0;
     this.coresCollected = 0;
     this.repairProgress = 0; // 0 to 4
     this.survivalTimer = 150.0; // 2 minutes 30 seconds
 
-    // Combo System (Addictive flow mechanic)
+    // Combo System
     this.combo = 1;
     this.comboTimer = 0;
     this.comboMaxTime = 3.8;
@@ -48,12 +61,14 @@ class Game {
     // EMP Overdrive state
     this.empTimer = 0;
 
-    // Player state
+    // Player state (Rendered as an aerodynamic cyber arrow)
     this.player = {
       x: this.width / 2,
       y: this.height / 2,
       prevX: this.width / 2,
       prevY: this.height / 2,
+      angle: -Math.PI / 2,       // Facing upwards initially
+      targetAngle: -Math.PI / 2,
       radius: 18,
       speed: 250,
       integrity: 5,
@@ -74,10 +89,16 @@ class Game {
     this.maxCores = 5;
     this.coreSpawnCounter = 0;
 
-    // Drones
+    // Security Drones (Pool of 4 drones unlocked across 5 Threat Levels)
     this.drones = [];
-
     this._initDrones();
+
+    // Auto-pause when window loses focus (Rule 2 & 4 compliant)
+    window.addEventListener('blur', () => {
+      if (this.state === 'PLAYING') {
+        this.state = 'PAUSED';
+      }
+    });
 
     // Listen for resize to maintain true full-screen experience
     window.addEventListener('resize', () => this.resize());
@@ -99,14 +120,16 @@ class Game {
     this.player.x = Math.max(pad, Math.min(this.width - pad, this.player.x));
     this.player.y = Math.max(pad + 54, Math.min(this.height - pad, this.player.y));
 
-    // Update drone routes to match new screen dimensions
+    // Update all drone routes
     this._updateDroneRoutes();
   }
 
   _initDrones() {
     this.drones = [
-      this._createDrone('Scout Alpha', this._getRoute1(), 115, 0, false),
-      this._createDrone('Hunter Omega', this._getRoute2(), 115, 2, true)
+      this._createDrone('Scout Alpha', this._getRoute1(), 112, 0, false, '#ff1744', 1),
+      this._createDrone('Hunter Omega', this._getRoute2(), 112, 2, true, '#ff0055', 1),
+      this._createDrone('Viper Phantom', this._getRoute3(), 125, 1, true, '#c000ff', 4),
+      this._createDrone('Titan Overlord', this._getRoute4(), 130, 0, true, '#ff8800', 5)
     ];
   }
 
@@ -128,17 +151,38 @@ class Game {
     ];
   }
 
+  _getRoute3() {
+    return [
+      { x: this.width * 0.20, y: this.height * 0.70 },
+      { x: this.width * 0.50, y: this.height * 0.25 },
+      { x: this.width * 0.80, y: this.height * 0.70 }
+    ];
+  }
+
+  _getRoute4() {
+    return [
+      { x: this.width * 0.35, y: this.height * 0.35 },
+      { x: this.width * 0.65, y: this.height * 0.35 },
+      { x: this.width * 0.65, y: this.height * 0.65 },
+      { x: this.width * 0.35, y: this.height * 0.65 }
+    ];
+  }
+
   _updateDroneRoutes() {
-    if (this.drones.length >= 2) {
+    if (this.drones.length >= 4) {
       this.drones[0].baseRoute = this._getRoute1();
       this.drones[1].baseRoute = this._getRoute2();
+      this.drones[2].baseRoute = this._getRoute3();
+      this.drones[3].baseRoute = this._getRoute4();
     }
   }
 
-  _createDrone(name, baseRoute, speed, startIdx, isHunter) {
+  _createDrone(name, baseRoute, speed, startIdx, isHunter, color, minLevel) {
     return {
       name: name,
       isHunter: isHunter,
+      color: color,
+      minLevel: minLevel,
       baseRoute: baseRoute,
       currentWaypointIdx: startIdx,
       x: baseRoute[startIdx].x,
@@ -156,9 +200,11 @@ class Game {
   }
 
   getThreatLevel() {
-    if (this.score >= 1700 || this.survivalTimer < 45) return 3; // APEX HUNT
-    if (this.score >= 650 || this.survivalTimer < 95) return 2;  // INTERCEPT
-    return 1;                                                    // SCOUT
+    if (this.score >= 3800 || this.survivalTimer < 30) return 5; // OMEGA MATRIX (4 Drones)
+    if (this.score >= 2400 || this.survivalTimer < 60) return 4; // VIPER SQUADRON (3 Drones)
+    if (this.score >= 1400 || this.survivalTimer < 90) return 3; // APEX PREDATOR (2 Drones, high aggression)
+    if (this.score >= 600 || this.survivalTimer < 120) return 2;  // INTERCEPT SEEKERS (2 Drones, predictive tracking)
+    return 1;                                                    // SCOUT SURVEILLANCE (2 Drones, regional patrols)
   }
 
   startNewGame() {
@@ -182,6 +228,8 @@ class Game {
     this.player.y = this.height / 2;
     this.player.prevX = this.player.x;
     this.player.prevY = this.player.y;
+    this.player.angle = -Math.PI / 2;
+    this.player.targetAngle = -Math.PI / 2;
     this.player.integrity = 5;
     this.player.invulnTimer = 0;
     this.player.vx = 0;
@@ -237,7 +285,16 @@ class Game {
   }
 
   update(dt) {
-    // Globally decay screen shake every frame so it never hangs
+    // Update ambient cyber particles
+    for (const ap of this.ambientParticles) {
+      ap.y += ap.speedY;
+      if (ap.y < 0) {
+        ap.y = this.height;
+        ap.x = Math.random() * this.width;
+      }
+    }
+
+    // Globally decay screen shake
     if (this.screenShake > 0) {
       this.screenShake = Math.max(0, this.screenShake - dt * 25);
     }
@@ -251,13 +308,20 @@ class Game {
       return;
     }
 
+    // PAUSED STATE (Rule 1 Compliant: Z toggles Pause / Resume)
+    if (this.state === 'PAUSED') {
+      if (window.input.consumeZ()) {
+        this.state = 'PLAYING';
+      }
+      return;
+    }
+
     // GAME OVER SCREEN
     if (this.state === 'GAMEOVER') {
       this.screenShake = 0;
       this.gameOverTimer += dt;
 
       // Rule 2: Ignore Z for the first 1 second of game-over screen.
-      // Require fresh press of Z.
       if (this.gameOverTimer >= 1.0) {
         if (window.input.consumeZ()) {
           this.startNewGame();
@@ -270,6 +334,12 @@ class Game {
 
     // PLAYING STATE
     if (this.state === 'PLAYING') {
+      // Toggle Pause with Z (AGENTS.md Rule 1 compliant: ONLY allowed 6 keys)
+      if (window.input.consumeZ()) {
+        this.state = 'PAUSED';
+        return;
+      }
+
       // Countdown survival timer
       this.survivalTimer -= dt;
       if (this.survivalTimer <= 0) {
@@ -282,23 +352,29 @@ class Game {
         return;
       }
 
-      // Track escalating threat levels
+      // Track escalating 5 threat levels
       const currentThreat = this.getThreatLevel();
       if (currentThreat !== this.prevThreatLevel) {
         this.prevThreatLevel = currentThreat;
-        const threatNames = ['', 'LEVEL 1: SCOUT PROTOCOL', 'LEVEL 2: INTERCEPT SEEKERS', 'LEVEL 3: APEX PREDATOR HUNT'];
+        const threatNames = [
+          '',
+          'SECURITY LEVEL 1: SCOUT PROTOCOL',
+          'SECURITY LEVEL 2: INTERCEPT SEEKERS',
+          'SECURITY LEVEL 3: APEX PREDATOR HUNT',
+          'SECURITY LEVEL 4: VIPER SQUADRON ARRIVED',
+          'SECURITY LEVEL 5: OMEGA MATRIX ENGAGED'
+        ];
         this.bannerText = threatNames[currentThreat];
-        this.bannerTimer = 2.6;
-        this.screenShake = 6;
+        this.bannerTimer = 2.8;
+        this.screenShake = 8;
         if (window.sound) window.sound.playAlert();
       }
 
-      // Banner timer
       if (this.bannerTimer > 0) {
         this.bannerTimer -= dt;
       }
 
-      // Heartbeat pulse sound loop for tension
+      // Heartbeat pulse loop across 5 threat levels
       if (window.sound) {
         window.sound.playHeartbeat(currentThreat);
       }
@@ -324,9 +400,6 @@ class Game {
         this.player.dashActiveTimer -= dt;
       }
 
-      // Safe consumption of Z during gameplay (never harmful)
-      window.input.consumeZ();
-
       // Space Action: Neon Surge Dash (Rule 1 & 2 compliant)
       if (window.input.consumeSpace()) {
         if (this.player.dashCooldown <= 0) {
@@ -348,6 +421,16 @@ class Game {
         dy *= 0.7071;
       }
 
+      // Update Player Heading Angle (Aerodynamic Arrow Steering)
+      if (dx !== 0 || dy !== 0) {
+        this.player.targetAngle = Math.atan2(dy, dx);
+      }
+      // Smooth interpolation for arrow rotation
+      let diff = this.player.targetAngle - this.player.angle;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      this.player.angle += diff * Math.min(1, dt * 18);
+
       // Speed calculation (with dash boost if active)
       let currentSpeed = this.player.speed;
       if (this.player.dashActiveTimer > 0) {
@@ -364,6 +447,7 @@ class Game {
         this.playerTrail.push({
           x: this.player.x,
           y: this.player.y,
+          angle: this.player.angle,
           radius: this.player.radius,
           alpha: this.player.dashActiveTimer > 0 ? 0.75 : 0.4,
           color: this.player.dashActiveTimer > 0 ? '#ffea00' : '#00f0ff'
@@ -405,8 +489,10 @@ class Game {
         }
       }
 
-      // Security Drones update
+      // Security Drones update (Only active drones based on current threat level)
       for (const drone of this.drones) {
+        if (drone.minLevel > currentThreat) continue;
+
         this._updateDrone(drone, dt, currentThreat);
 
         // Near-miss / Close Call adrenaline bonus (Dodging a charging drone)
@@ -578,10 +664,9 @@ class Game {
   }
 
   _updateDrone(drone, dt, threatLevel) {
-    // Dynamic drone speed based on threat level
-    let baseSpeed = 115;
-    if (threatLevel === 2) baseSpeed = 138;
-    if (threatLevel === 3) baseSpeed = 160;
+    // Dynamic drone speed based on threat level (smooth and manageable)
+    const baseSpeeds = [112, 112, 128, 145, 162, 180];
+    const baseSpeed = baseSpeeds[threatLevel] || 112;
 
     const speedMult = this.empTimer > 0 ? 0.5 : 1.0;
     const finalSpeed = baseSpeed * speedMult;
@@ -606,11 +691,15 @@ class Game {
         // Player Tracking Logic based on Threat Level
         let shouldTrack = false;
         if (threatLevel === 2) {
-          // Hunter drone tracks player every other turn; Scout tracks 25% of the time
           shouldTrack = drone.isHunter ? !drone.isTracking : Math.random() < 0.25;
         } else if (threatLevel === 3) {
-          // Apex Hunt: Hunter ALWAYS tracks player; Scout tracks 60% of the time!
+          shouldTrack = drone.isHunter ? true : Math.random() < 0.5;
+        } else if (threatLevel === 4) {
+          // Level 4: 2 hunter drones track player
           shouldTrack = drone.isHunter ? true : Math.random() < 0.6;
+        } else if (threatLevel === 5) {
+          // Level 5: Aggressive coordinated chase
+          shouldTrack = drone.isHunter ? true : Math.random() < 0.75;
         }
 
         if (shouldTrack) {
@@ -706,7 +795,7 @@ class Game {
     ctx.clearRect(0, 0, this.width, this.height);
 
     ctx.save();
-    // Only apply screen shake during active gameplay (never in Game Over / Title)
+    // Only apply screen shake during active gameplay (never in Game Over / Title / Paused)
     if (this.state === 'PLAYING' && this.screenShake > 0.05) {
       const shakeX = (Math.random() - 0.5) * this.screenShake;
       const shakeY = (Math.random() - 0.5) * this.screenShake;
@@ -717,6 +806,17 @@ class Game {
     ctx.fillStyle = '#060a14';
     ctx.fillRect(0, 0, this.width, this.height);
 
+    // Ambient floating cyber particles in background
+    for (const ap of this.ambientParticles) {
+      ctx.save();
+      ctx.fillStyle = ap.color;
+      ctx.globalAlpha = ap.alpha;
+      ctx.beginPath();
+      ctx.arc(ap.x, ap.y, ap.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Neon grid floor
     this._renderGrid(ctx);
 
@@ -725,6 +825,10 @@ class Game {
     } else if (this.state === 'PLAYING') {
       this._renderGameplay(ctx);
       this._renderHUD(ctx);
+    } else if (this.state === 'PAUSED') {
+      this._renderGameplay(ctx);
+      this._renderHUD(ctx);
+      this._renderPausedScreen(ctx);
     } else if (this.state === 'GAMEOVER') {
       this._renderGameplay(ctx);
       this._renderGameOverScreen(ctx);
@@ -777,11 +881,10 @@ class Game {
       ctx.stroke();
     }
 
-    // Dynamic Outer Arena Glow based on Threat Level
-    let borderColor = '#00f0ff'; // Level 1 Cyan
-    if (threat === 2) borderColor = '#ffb300'; // Level 2 Amber
-    if (threat === 3) borderColor = '#ff1744'; // Level 3 Crimson
-    if (this.empTimer > 0) borderColor = '#ff00ff'; // EMP Purple
+    // Dynamic Outer Arena Glow based on 5 Threat Levels
+    const borderColors = ['#00f0ff', '#00f0ff', '#ffb300', '#ff5500', '#c000ff', '#ff1744'];
+    let borderColor = borderColors[threat] || '#00f0ff';
+    if (this.empTimer > 0) borderColor = '#ff00ff';
 
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 3;
@@ -789,14 +892,18 @@ class Game {
   }
 
   _renderGameplay(ctx) {
+    const currentThreat = this.getThreatLevel();
+
     // Render AI Waypoint Markers and Tracking Lasers on floor
     for (const drone of this.drones) {
+      if (drone.minLevel > currentThreat) continue;
+
       if (drone.isTracking) {
-        // High tension: Tracking Laser targeting the player!
+        // Tracking Laser targeting the player
         ctx.save();
         ctx.setLineDash([10, 6]);
         ctx.lineDashOffset = -performance.now() / 25;
-        ctx.strokeStyle = '#ff0055';
+        ctx.strokeStyle = drone.color;
         ctx.lineWidth = 3.5;
         ctx.beginPath();
         ctx.moveTo(drone.x, drone.y);
@@ -811,13 +918,12 @@ class Game {
         ctx.save();
         ctx.translate(rx, ry);
         ctx.rotate(rot);
-        ctx.strokeStyle = '#ff1744';
+        ctx.strokeStyle = drone.color;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(0, 0, 24, 0, Math.PI * 2);
         ctx.stroke();
 
-        // 4 Crosshairs
         for (let i = 0; i < 4; i++) {
           const a = (i * Math.PI) / 2;
           ctx.beginPath();
@@ -832,7 +938,7 @@ class Game {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 12px "Courier New", monospace';
-        ctx.fillStyle = '#ff1744';
+        ctx.fillStyle = drone.color;
         ctx.fillText('TARGET LOCKED', rx, ry + 36);
         ctx.restore();
 
@@ -884,13 +990,20 @@ class Game {
       ctx.restore();
     }
 
-    // Render Player Ghost Trails
+    // Render Player Ghost Trails (Arrow shape)
     for (const tr of this.playerTrail) {
       ctx.save();
+      ctx.translate(tr.x, tr.y);
+      ctx.rotate(tr.angle);
       ctx.globalAlpha = Math.max(0, tr.alpha);
       ctx.fillStyle = tr.color;
+
       ctx.beginPath();
-      ctx.arc(tr.x, tr.y, tr.radius * 0.85, 0, Math.PI * 2);
+      ctx.moveTo(18, 0);
+      ctx.lineTo(-12, -12);
+      ctx.lineTo(-6, 0);
+      ctx.lineTo(-12, 12);
+      ctx.closePath();
       ctx.fill();
       ctx.restore();
     }
@@ -941,8 +1054,10 @@ class Game {
 
     // Render Security Drones
     for (const drone of this.drones) {
+      if (drone.minLevel > currentThreat) continue;
+
       ctx.save();
-      const droneColor = this.empTimer > 0 ? '#b300b3' : drone.isHunter ? '#ff0055' : '#ff1744';
+      const droneColor = this.empTimer > 0 ? '#b300b3' : drone.color;
       ctx.shadowColor = droneColor;
       ctx.shadowBlur = 22;
 
@@ -952,7 +1067,7 @@ class Game {
       ctx.fill();
 
       // Drone inner eye
-      ctx.fillStyle = drone.state === 'WARNING' ? '#ffffff' : '#300008';
+      ctx.fillStyle = drone.state === 'WARNING' ? '#ffffff' : '#280008';
       ctx.beginPath();
       ctx.arc(drone.x, drone.y, drone.radius * 0.5, 0, Math.PI * 2);
       ctx.fill();
@@ -960,7 +1075,7 @@ class Game {
       // Warning pulse ring around drone
       if (drone.state === 'WARNING') {
         const ringRadius = drone.radius + (drone.warningTimer / drone.warningDuration) * 18;
-        ctx.strokeStyle = drone.isTracking ? '#ff1744' : 'rgba(255, 0, 128, 0.9)';
+        ctx.strokeStyle = drone.color;
         ctx.lineWidth = 2.8;
         ctx.beginPath();
         ctx.arc(drone.x, drone.y, ringRadius, 0, Math.PI * 2);
@@ -969,43 +1084,8 @@ class Game {
       ctx.restore();
     }
 
-    // Render Player
-    ctx.save();
-    const isInvuln = this.player.invulnTimer > 0;
-    if (!isInvuln || Math.floor(performance.now() / 90) % 2 === 0) {
-      if (this.combo >= 5) {
-        ctx.shadowColor = '#ffd700';
-        ctx.shadowBlur = 26;
-        ctx.fillStyle = '#ffd700';
-      } else if (this.player.dashActiveTimer > 0) {
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 30;
-        ctx.fillStyle = '#ffffff';
-      } else {
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = '#00f0ff';
-      }
-
-      ctx.beginPath();
-      ctx.arc(this.player.x, this.player.y, this.player.radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(this.player.x, this.player.y, this.player.radius * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Space Dash Ready Indicator around player
-    if (this.player.dashCooldown <= 0) {
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.55)';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(this.player.x, this.player.y, this.player.radius + 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
+    // Render Player as an Aerodynamic Cyber Arrow
+    this._renderPlayer(ctx);
 
     // Render Floating Texts
     for (const ft of this.floatingTexts) {
@@ -1032,6 +1112,84 @@ class Game {
       ctx.fillText(this.bannerText, this.width / 2, this.height * 0.38);
       ctx.restore();
     }
+  }
+
+  _renderPlayer(ctx) {
+    ctx.save();
+    ctx.translate(this.player.x, this.player.y);
+    ctx.rotate(this.player.angle);
+
+    const isInvuln = this.player.invulnTimer > 0;
+    if (!isInvuln || Math.floor(performance.now() / 90) % 2 === 0) {
+      let mainColor = '#00f0ff';
+      let glowColor = '#00f0ff';
+
+      if (this.combo >= 5) {
+        mainColor = '#ffd700';
+        glowColor = '#ffd700';
+      } else if (this.player.dashActiveTimer > 0) {
+        mainColor = '#ffffff';
+        glowColor = '#00ffff';
+      }
+
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 24;
+
+      // Thruster exhaust plumes when moving or dashing
+      const isMoving = window.input.held.left || window.input.held.right || window.input.held.up || window.input.held.down;
+      if (isMoving || this.player.dashActiveTimer > 0) {
+        const plumeLen = this.player.dashActiveTimer > 0 ? 26 + Math.random() * 12 : 14 + Math.random() * 8;
+        ctx.fillStyle = this.player.dashActiveTimer > 0 ? '#ffea00' : '#00ffff';
+
+        // Left thruster plume
+        ctx.beginPath();
+        ctx.moveTo(-16, -7);
+        ctx.lineTo(-16 - plumeLen, -7);
+        ctx.lineTo(-13, -3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Right thruster plume
+        ctx.beginPath();
+        ctx.moveTo(-16, 7);
+        ctx.lineTo(-16 - plumeLen, 7);
+        ctx.lineTo(-13, 3);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Aerodynamic Futuristic Delta Arrow
+      ctx.fillStyle = mainColor;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.2;
+
+      ctx.beginPath();
+      ctx.moveTo(22, 0);       // Nose / tip
+      ctx.lineTo(-15, -15);     // Left wingtip
+      ctx.lineTo(-8, -5);       // Left inner notch
+      ctx.lineTo(-11, 0);       // Rear center notch
+      ctx.lineTo(-8, 5);        // Right inner notch
+      ctx.lineTo(-15, 15);      // Right wingtip
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Glowing Cockpit Node
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(3, 0, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Space Dash Ready Indicator around arrow
+    if (this.player.dashCooldown <= 0) {
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.55)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 26, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   _renderHUD(ctx) {
@@ -1081,19 +1239,20 @@ class Game {
       ctx.strokeRect(296 + p * 12, 19, 9, 14);
     }
 
-    // 3. THREAT LEVEL BADGE
+    // 3. THREAT LEVEL BADGE (5 Threat Levels)
     const threat = this.getThreatLevel();
+    const threatColors = ['#00ffcc', '#00ffcc', '#ffb300', '#ff5500', '#c000ff', '#ff1744'];
+    const threatLabels = [
+      '',
+      'THREAT: LVL 1 [SCOUT]',
+      'THREAT: LVL 2 [SEEK]',
+      'THREAT: LVL 3 [APEX]',
+      'THREAT: LVL 4 [VIPER]',
+      'THREAT: LVL 5 [OMEGA]'
+    ];
     ctx.font = 'bold 13px "Courier New", monospace';
-    if (threat === 3) {
-      ctx.fillStyle = '#ff1744';
-      ctx.fillText('THREAT: LVL 3 [HUNT]', 365, 27);
-    } else if (threat === 2) {
-      ctx.fillStyle = '#ffb300';
-      ctx.fillText('THREAT: LVL 2 [SEEK]', 365, 27);
-    } else {
-      ctx.fillStyle = '#00ffcc';
-      ctx.fillText('THREAT: LVL 1 [SCOUT]', 365, 27);
-    }
+    ctx.fillStyle = threatColors[threat] || '#00ffcc';
+    ctx.fillText(threatLabels[threat], 365, 27);
 
     // 4. SURVIVAL TIME COUNTDOWN
     const mins = Math.floor(this.survivalTimer / 60);
@@ -1101,24 +1260,24 @@ class Game {
     const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     ctx.font = 'bold 20px "Courier New", monospace';
     ctx.fillStyle = this.survivalTimer < 30 ? '#ff1744' : '#00f0ff';
-    ctx.fillText(`TIME: ${timeStr}`, 540, 27);
+    ctx.fillText(`TIME: ${timeStr}`, 550, 27);
 
     // 5. SPACE DASH STATUS
     ctx.font = 'bold 13px "Segoe UI", Arial, sans-serif';
     if (this.player.dashCooldown <= 0) {
       ctx.fillStyle = '#00ffcc';
-      ctx.fillText('SPACE: READY', 675, 27);
+      ctx.fillText('SPACE: READY', 690, 27);
     } else {
       ctx.fillStyle = '#64748b';
       const pct = Math.ceil(this.player.dashCooldown);
-      ctx.fillText(`SPACE: ${pct}s`, 675, 27);
+      ctx.fillText(`SPACE: ${pct}s`, 690, 27);
     }
 
     // 6. COMBO MULTIPLIER
     if (this.combo > 1) {
       ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`x${this.combo}`, 775, 27);
+      ctx.fillText(`x${this.combo}`, 795, 27);
     }
 
     // 7. SCORE & HIGH SCORE
@@ -1134,6 +1293,48 @@ class Game {
     ctx.restore();
   }
 
+  _renderPausedScreen(ctx) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(6, 10, 20, 0.85)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const cy = this.height / 2;
+
+    ctx.shadowColor = '#00f0ff';
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = '#00f0ff';
+    ctx.font = 'bold 50px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('GAME PAUSED', this.width / 2, cy - 80);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffea00';
+    ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('Press Z to resume', this.width / 2, cy - 25);
+
+    // Box with controls reminder
+    const bw = Math.min(520, this.width - 60);
+    const bh = 140;
+    const bx = (this.width - bw) / 2;
+    const by = cy + 20;
+
+    ctx.fillStyle = '#0c1626';
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 2;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeRect(bx, by, bw, bh);
+
+    ctx.textAlign = 'left';
+    ctx.font = '17px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#e0e0e0';
+    ctx.fillText('• Arrow Keys : Directional Movement', bx + 30, by + 35);
+    ctx.fillText('• Z Key : Resume Gameplay', bx + 30, by + 70);
+    ctx.fillText('• Space : Neon Surge Dash (2.2s cooldown)', bx + 30, by + 105);
+
+    ctx.restore();
+  }
+
   _renderTitleScreen(ctx) {
     ctx.save();
     ctx.fillStyle = 'rgba(6, 10, 20, 0.90)';
@@ -1141,59 +1342,80 @@ class Game {
 
     const centerY = this.height / 2;
 
-    // Title
+    // Glowing Cyber Logo
     ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 24;
+    ctx.shadowBlur = 28;
     ctx.fillStyle = '#00f0ff';
-    ctx.font = 'bold 54px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 56px "Segoe UI", Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('NEON CORE: AI ARENA', this.width / 2, centerY - 160);
+    ctx.fillText('NEON CORE: AI ARENA', this.width / 2, centerY - 175);
     ctx.restore();
 
     ctx.save();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#8bf0ff';
     ctx.font = '22px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('Futuristic 2D Adaptive Arcade Survival', this.width / 2, centerY - 115);
+    ctx.fillText('Futuristic 2D Adaptive Arcade Survival', this.width / 2, centerY - 128);
 
-    // Best Score Display
+    // Best Score Display with Gold Trophy Accent
     if (this.highScore > 0) {
       ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`CURRENT HIGH SCORE: ${this.highScore}`, this.width / 2, centerY - 80);
+      ctx.fillText(`★ ALL-TIME HIGH SCORE: ${this.highScore} ★`, this.width / 2, centerY - 92);
     }
 
-    // Instructions box
-    ctx.fillStyle = '#0c1626';
+    // High contrast instructions panel with Cyber Visual Keycaps
+    const boxW = Math.min(760, this.width - 50);
+    const boxH = 240;
+    const boxX = (this.width - boxW) / 2;
+    const boxY = centerY - 65;
+
+    ctx.fillStyle = '#0a1424';
     ctx.strokeStyle = '#00f0ff';
     ctx.lineWidth = 2;
-    const boxW = Math.min(740, this.width - 60);
-    const boxH = 225;
-    const boxX = (this.width - boxW) / 2;
-    const boxY = centerY - 50;
     ctx.fillRect(boxX, boxY, boxW, boxH);
     ctx.strokeRect(boxX, boxY, boxW, boxH);
 
+    // Decorative Sci-Fi Corner Brackets
+    ctx.strokeStyle = '#ff00aa';
+    ctx.lineWidth = 3;
+    const bLen = 16;
+    // Top-left
+    ctx.beginPath(); ctx.moveTo(boxX, boxY + bLen); ctx.lineTo(boxX, boxY); ctx.lineTo(boxX + bLen, boxY); ctx.stroke();
+    // Top-right
+    ctx.beginPath(); ctx.moveTo(boxX + boxW - bLen, boxY); ctx.lineTo(boxX + boxW, boxY); ctx.lineTo(boxX + boxW, boxY + bLen); ctx.stroke();
+    // Bottom-left
+    ctx.beginPath(); ctx.moveTo(boxX, boxY + boxH - bLen); ctx.lineTo(boxX, boxY + boxH); ctx.lineTo(boxX + bLen, boxY + boxH); ctx.stroke();
+    // Bottom-right
+    ctx.beginPath(); ctx.moveTo(boxX + boxW - bLen, boxY + boxH); ctx.lineTo(boxX + boxW, boxY + boxH); ctx.lineTo(boxX + boxW, boxY + boxH - bLen); ctx.stroke();
+
     ctx.textAlign = 'left';
-    ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('CONTROLS (ONLY 6 KEYS ALLOWED):', boxX + 30, boxY + 40);
+    ctx.fillText('COMPETITION CONTROLS (STRICT SIX KEYS ONLY):', boxX + 28, boxY + 36);
 
-    ctx.font = '19px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#00ffcc';
-    ctx.fillText('• Arrow Keys :', boxX + 30, boxY + 82);
+    // Visual Keycap Cluster 1: ARROW KEYS
+    this._drawKeycap(ctx, boxX + 28, boxY + 58, 120, 34, '▲ ▼ ◀ ▶', '#00f0ff');
+    ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Move Up, Down, Left, Right (Hold for continuous move)', boxX + 180, boxY + 82);
+    ctx.fillText('Continuous Directional Movement (Held + Diagonals)', boxX + 160, boxY + 80);
 
-    ctx.fillStyle = '#00ffcc';
-    ctx.fillText('• Z Key :', boxX + 30, boxY + 122);
+    // Visual Keycap Cluster 2: Z KEY
+    this._drawKeycap(ctx, boxX + 28, boxY + 104, 120, 34, 'Z KEY', '#00ffcc');
+    ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Confirm / Start Game / Restart', boxX + 180, boxY + 122);
+    ctx.fillText('Confirm / Start Game / Pause / Resume / Restart', boxX + 160, boxY + 126);
 
-    ctx.fillStyle = '#00ffcc';
-    ctx.fillText('• Space :', boxX + 30, boxY + 162);
+    // Visual Keycap Cluster 3: SPACE KEY
+    this._drawKeycap(ctx, boxX + 28, boxY + 150, 120, 34, 'SPACE', '#ffea00');
+    ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Neon Surge Dash (2.2s cooldown, secondary dodge)', boxX + 180, boxY + 162);
+    ctx.fillText('Neon Surge Dash (2.2s cooldown, secondary dodge)', boxX + 160, boxY + 172);
+
+    // Feature note
+    ctx.font = '14px "Courier New", monospace';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('★ 5 Escalating Threat Levels ★ Adaptive Drone AI ★ 4 Seeker Classes', boxX + 28, boxY + 215);
 
     // Blinking "Press Z to start" (Rule 4 requirement)
     if (Math.floor(performance.now() / 500) % 2 === 0) {
@@ -1202,8 +1424,24 @@ class Game {
       ctx.fillStyle = '#ffea00';
       ctx.shadowColor = '#ffea00';
       ctx.shadowBlur = 18;
-      ctx.fillText('Press Z to start', this.width / 2, centerY + 230);
+      ctx.fillText('Press Z to start', this.width / 2, centerY + 225);
     }
+    ctx.restore();
+  }
+
+  _drawKeycap(ctx, x, y, w, h, text, color) {
+    ctx.save();
+    ctx.fillStyle = '#111d33';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = color;
+    ctx.fillText(text, x + w / 2, y + h / 2);
     ctx.restore();
   }
 
@@ -1223,7 +1461,7 @@ class Game {
       ctx.fillText('SURVIVAL COMPLETE!', this.width / 2, centerY - 140);
       ctx.font = '22px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('You outsmarted the adaptive AI arena!', this.width / 2, centerY - 95);
+      ctx.fillText('You conquered all 5 security threat levels!', this.width / 2, centerY - 95);
     } else {
       ctx.shadowColor = '#ff1744';
       ctx.shadowBlur = 24;

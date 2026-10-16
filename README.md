@@ -1,6 +1,6 @@
 # Neon Core: AI Arena 🎮
 
-A futuristic 2D arcade survival game where you pilot a glowing neon player, collect energy cores, and survive against security drones whose patrol routes dynamically adapt to your movement habits.
+A futuristic 2D arcade survival game where you pilot an aerodynamic glowing cyber arrow, collect energy cores, and survive against security drones whose patrol routes dynamically adapt to your movement habits.
 
 Built for the Game Jam under strict **AGENTS.md** competition constraints.
 
@@ -34,7 +34,7 @@ Then visit `http://localhost:8000`.
 
 ## Controls (Strictly Six Keys Only)
 
-In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using these six keyboard controls:
+In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using these six keyboard controls (No Escape, WASD, or extra keys):
 
 | Key | Action |
 |---|---|
@@ -42,30 +42,39 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
 | **Down Arrow** | Move down (continuous movement while held) |
 | **Left Arrow** | Move left (continuous movement while held) |
 | **Right Arrow** | Move right (continuous movement while held) |
-| **Z** | Confirm / Start Game / Restart (fresh press required) |
+| **Z** | Confirm / Start Game / Pause & Resume Toggle / Restart |
 | **Space** | Neon Surge Dash (2.2s cooldown, secondary dodge, safe action) |
 
-- **Diagonals**: Holding two perpendicular arrows simultaneously moves diagonally.
-- **No mouse/touch/buttons**: Zero clickable buttons, gestures, or extra keys.
+- **Diagonals**: Holding two perpendicular arrows simultaneously moves and steers diagonally.
+- **Player Arrow**: The player is rendered as a sleek delta-wing cyber arrow with animated dual thruster plumes that smoothly turn toward your movement direction.
+- **Pause & Resume**: Pressing **`Z`** during active gameplay pauses the game safely; pressing **`Z`** again resumes play. The game also automatically pauses if the browser window loses focus (`blur`).
 
 ---
 
-## High-Octane Escalating Tension & Addictive Features
+## 5 Escalating Threat Levels & 4 Enemy Classes
 
-1. **Escalating Threat Levels & Player Tracking**:
-   - **Level 1 (Scout Surveillance, Score 0-650)**: Drones patrol regional loops with subtle AI heatmap nudges (115 px/s).
-   - **Level 2 (Intercept Seekers, Score 650-1700)**: Hunter drones begin predicting your movement vector and locking onto your position with a targeting laser (138 px/s).
-   - **Level 3 (Apex Predator Hunt, Score 1700+)**: Aggressive multi-drone coordination where drones constantly target and charge your trajectory (160 px/s).
-   - *Reaction Guarantee*: Every tracking charge is preceded by a prominent 1.35-second lock-on laser and floor reticle, ensuring ample reaction time (Rule 3 compliant).
-2. **"Close Call" Adrenaline Bonus**:
-   - Dodging within inches of a charging drone awards `CLOSE CALL! +150` bonus points, sound effects, and spark bursts.
-3. **Escalating Heartbeat Audio**:
-   - Web Audio ambient electronic heartbeat pulses at accelerating tempos as the threat level rises.
-4. **Combo Multiplier Flow (Up to 5x)**:
-   - Collecting cores in rhythm boosts your score multiplier from `x1` up to `x5 MAX` with ascending musical bell chords.
-5. **Overdrive EMP Cores**:
-   - Rare magenta cores that disable drone tracking and slow drones down by 50% for 4 seconds!
-6. **Neon Surge Dash (`Space` Key)**:
-   - Swift escape burst with a 2.2-second cooldown and momentary collision immunity.
-7. **Persistent All-Time High Score**:
-   - Saved automatically to `localStorage`.
+As your score increases or the countdown timer advances, the AI arena activates higher security tiers and deploys additional hunters:
+
+1. **Level 1 — Scout Protocol (Score 0 – 600)**:
+   - 2 Drones: `Scout Alpha` & `Hunter Omega`.
+   - Baseline perimeter loops with subtle heatmap bias (Speed: 112 px/s).
+2. **Level 2 — Intercept Seekers (Score 600 – 1400)**:
+   - `Hunter Omega` initiates **Predictive Tracking**, projecting a crimson targeting laser toward where you are steering (Speed: 128 px/s).
+3. **Level 3 — Apex Predator (Score 1400 – 2400)**:
+   - Continuous lock-on charges, flanking sweeps, and escalating heartbeat audio (Speed: 145 px/s).
+4. **Level 4 — Viper Squadron (Score 2400 – 3800)**:
+   - **3rd Enemy Deployed**: `Viper Phantom` (sleek purple drone) joins the arena with high-speed triangular cross-cutting attacks (Speed: 162 px/s).
+5. **Level 5 — Omega Matrix (Score 3800+ or Final 30s)**:
+   - **4th Enemy Deployed**: `Titan Overlord` (heavy golden-red containment drone) locks down the central core with dual-zone sweeps (Speed: 180 px/s).
+
+*Fair Play Guarantee*: All drone charges are telegraphed 1.35 seconds in advance with high-contrast laser lines and rotating floor reticles (Rule 3 compliant, >= 1.0s reaction time).
+
+---
+
+## High-Octane Addictive Features
+
+- **"Close Call" Adrenaline Reward**: Dodging inches away from a charging drone awards `CLOSE CALL! +150` bonus score and sparks.
+- **Escalating Heartbeat Audio**: Procedural Web Audio synth heartbeat accelerating from Level 1 up to Level 5.
+- **Combo Multiplier Flow (Up to 5x)**: Rapid core pickups trigger ascending musical bell arpeggios and golden player auras.
+- **Overdrive EMP Cores**: Rare magenta cores that disable drone tracking and slow all drones by 50% for 4 seconds!
+- **Persistent All-Time High Score**: Automatically recorded and displayed across all screens.
