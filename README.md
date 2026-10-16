@@ -43,24 +43,31 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
 | **Left Arrow** | Move left (continuous movement while held) |
 | **Right Arrow** | Move right (continuous movement while held) |
 | **Z** | Confirm / Start Game / Restart (fresh press required) |
-| **Space** | Reserved secondary action (safe, no gameplay penalties) |
+| **Space** | Neon Surge Dash (2.2s cooldown, secondary dodge, safe action) |
 
 - **Diagonals**: Holding two perpendicular arrows simultaneously moves diagonally.
-- **No mouse/touch/buttons**: There are zero clickable buttons, gestures, or extra keys.
+- **No mouse/touch/buttons**: Zero clickable buttons, gestures, or extra keys.
 
 ---
 
-## Gameplay & Features
+## High-Octane Addictive Features
 
-1. **Energy Core Collection**:
-   - Move around the arena to pick up glowing amber cores. Each core gives +100 points.
-2. **Integrity & Repair**:
-   - Start with 5 integrity segments.
-   - Touching a security drone depletes 1 segment and triggers a 2.4-second invulnerability protection period.
-   - Every 4th core collected restores 1 lost integrity segment!
-3. **Deterministic Adaptive AI**:
-   - The game samples your position every 0.5 seconds into a rolling 40-sample window.
-   - An 8×5 grid evaluates your most frequented area and gently biases drone waypoints toward that region (capped at 64px displacement).
-   - Drones project a 1.35-second magenta route warning indicator before advancing along any segment, providing ample reaction time.
-4. **Win / Survival Objective**:
-   - Survive the arena for 2 minutes and 30 seconds (`02:30`) to achieve `SURVIVAL COMPLETE!`, or try to score as high as possible before losing all integrity.
+1. **Combo Multiplier Flow (Up to 5x)**:
+   - Collecting cores in quick succession builds a Combo Multiplier (`x1` up to `x5 MAX`).
+   - Earn massive bonus points and hear escalating harmonic musical pickup chimes!
+2. **Rare Overdrive Cores & EMP Slowdown**:
+   - Every 5th core can be a glowing magenta **Overdrive Core**.
+   - Grants +400 bonus points and triggers an **EMP blast** that slows security drones by 35% for 3.5 seconds.
+3. **Neon Surge Dash (`Space` key)**:
+   - Hit `Space` to burst forward, dodging close calls and leaving sonic shockwaves.
+   - Strictly obeys AGENTS.md with a 2.2-second cooldown and zero harmful accidental press consequences.
+4. **Procedural Web Audio (Zero External Files)**:
+   - Dynamic retro sci-fi synthesizers built right into the browser via Web Audio API.
+5. **High Score Tracker**:
+   - Automatically saves and tracks your all-time high score in `localStorage`.
+6. **Integrity & Repair**:
+   - 5 integrity segments with forgiving 2.4-second invulnerability protection.
+   - Every 4th core collected repairs 1 missing integrity segment.
+7. **Deterministic Adaptive AI**:
+   - Samples player positions every 0.5s in an 8×5 arena grid.
+   - Nudges drone patrol waypoints toward your frequent spots (capped at 64px) with clear 1.35s advance route warning indicators.
