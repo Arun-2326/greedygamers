@@ -82,3 +82,23 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
    - **Level 5 (5000+ pts)**: Omega Matrix (`Titan Overlord` joins; all 4 drones execute multi-angle pursuit dashes).
 8. **Procedural Web Audio Heartbeat & Audio Synthesizer**:
    - Accelerating synth pulse matching threat level, plus dynamic warning chirps and lockdown impact slams.
+
+---
+
+## Optional: AI Vision Gesture Controller (Hands-Free Play) 🖐️
+
+For demonstrations or hands-free gameplay, a standalone **AI Vision Gesture Bridge** is included (`gesture_controller.py`). It uses your webcam to detect hand gestures and converts them into hardware keyboard events, preserving **100% compliance with AGENTS.md rules**:
+
+### How to Run the Gesture Controller
+1. Double-click `start_gesture_control.bat` (or run `python gesture_controller.py`).
+2. Focus the game in your browser window.
+3. Use the following hand gestures in front of your webcam:
+
+| Hand Gesture | Emulated Key | Action in Game |
+|---|---|---|
+| **Shift Hand Up / Down / Left / Right** | `Arrow Keys` | Continuous directional steering |
+| **Hold Hand in Center Deadzone** | *None* | Neutral / maintain current drift |
+| **Closed Fist or Pinch (Thumb + Index)** | `Z` | Start / Confirm / Resume / Restart |
+| **Open Spread Palm** | `Space` | Neon Surge Dash (2.0s cooldown) |
+
+*Press `q` or `Esc` in the camera window to safely quit the gesture bridge.*
