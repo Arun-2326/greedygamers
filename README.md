@@ -50,24 +50,22 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
 
 ---
 
-## High-Octane Addictive Features
+## High-Octane Escalating Tension & Addictive Features
 
-1. **Combo Multiplier Flow (Up to 5x)**:
-   - Collecting cores in quick succession builds a Combo Multiplier (`x1` up to `x5 MAX`).
-   - Earn massive bonus points and hear escalating harmonic musical pickup chimes!
-2. **Rare Overdrive Cores & EMP Slowdown**:
-   - Every 5th core can be a glowing magenta **Overdrive Core**.
-   - Grants +400 bonus points and triggers an **EMP blast** that slows security drones by 35% for 3.5 seconds.
-3. **Neon Surge Dash (`Space` key)**:
-   - Hit `Space` to burst forward, dodging close calls and leaving sonic shockwaves.
-   - Strictly obeys AGENTS.md with a 2.2-second cooldown and zero harmful accidental press consequences.
-4. **Procedural Web Audio (Zero External Files)**:
-   - Dynamic retro sci-fi synthesizers built right into the browser via Web Audio API.
-5. **High Score Tracker**:
-   - Automatically saves and tracks your all-time high score in `localStorage`.
-6. **Integrity & Repair**:
-   - 5 integrity segments with forgiving 2.4-second invulnerability protection.
-   - Every 4th core collected repairs 1 missing integrity segment.
-7. **Deterministic Adaptive AI**:
-   - Samples player positions every 0.5s in an 8×5 arena grid.
-   - Nudges drone patrol waypoints toward your frequent spots (capped at 64px) with clear 1.35s advance route warning indicators.
+1. **Escalating Threat Levels & Player Tracking**:
+   - **Level 1 (Scout Surveillance, Score 0-650)**: Drones patrol regional loops with subtle AI heatmap nudges (115 px/s).
+   - **Level 2 (Intercept Seekers, Score 650-1700)**: Hunter drones begin predicting your movement vector and locking onto your position with a targeting laser (138 px/s).
+   - **Level 3 (Apex Predator Hunt, Score 1700+)**: Aggressive multi-drone coordination where drones constantly target and charge your trajectory (160 px/s).
+   - *Reaction Guarantee*: Every tracking charge is preceded by a prominent 1.35-second lock-on laser and floor reticle, ensuring ample reaction time (Rule 3 compliant).
+2. **"Close Call" Adrenaline Bonus**:
+   - Dodging within inches of a charging drone awards `CLOSE CALL! +150` bonus points, sound effects, and spark bursts.
+3. **Escalating Heartbeat Audio**:
+   - Web Audio ambient electronic heartbeat pulses at accelerating tempos as the threat level rises.
+4. **Combo Multiplier Flow (Up to 5x)**:
+   - Collecting cores in rhythm boosts your score multiplier from `x1` up to `x5 MAX` with ascending musical bell chords.
+5. **Overdrive EMP Cores**:
+   - Rare magenta cores that disable drone tracking and slow drones down by 50% for 4 seconds!
+6. **Neon Surge Dash (`Space` Key)**:
+   - Swift escape burst with a 2.2-second cooldown and momentary collision immunity.
+7. **Persistent All-Time High Score**:
+   - Saved automatically to `localStorage`.

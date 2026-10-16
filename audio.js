@@ -5,6 +5,7 @@ class SoundFX {
   constructor() {
     this.ctx = null;
     this.enabled = true;
+    this.lastHeartbeat = 0;
   }
 
   _init() {
@@ -27,7 +28,6 @@ class SoundFX {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    // Scale pitch with combo multiplier (higher pitch for higher combo)
     const baseFreq = 440 + Math.min(combo, 5) * 80;
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(baseFreq, t);
@@ -153,6 +153,102 @@ class SoundFX {
 
     osc.start(t);
     osc.stop(t + 0.16);
+  }
+
+  playLockOn() {
+    this._init();
+    if (!this.ctx || !this.enabled) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(680, t);
+    osc.frequency.setValueAtTime(820, t + 0.07);
+
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.15);
+  }
+
+  playAlert() {
+    this._init();
+    if (!this.ctx || !this.enabled) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(320, t);
+    osc.frequency.setValueAtTime(480, t + 0.14);
+
+    gain.gain.setValueAtTime(0.22, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.35);
+  }
+
+  playCloseCall() {
+    this._init();
+    if (!this.ctx || !this.enabled) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, t);
+    osc.frequency.exponentialRampToValueAtTime(1200, t + 0.12);
+
+    gain.gain.setValueAtTime(0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.12);
+  }
+
+  playHeartbeat(threatLevel = 1) {
+    this._init();
+    if (!this.ctx || !this.enabled) return;
+
+    const t = this.ctx.currentTime;
+    // Interval based on threat level: 1.2s -> 0.85s -> 0.6s
+    const interval = threatLevel === 3 ? 0.6 : threatLevel === 2 ? 0.85 : 1.2;
+
+    if (t - this.lastHeartbeat < interval) return;
+    this.lastHeartbeat = t;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    const freq = threatLevel === 3 ? 90 : threatLevel === 2 ? 75 : 60;
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.14);
+
+    const vol = threatLevel === 3 ? 0.18 : threatLevel === 2 ? 0.14 : 0.09;
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.14);
   }
 }
 
