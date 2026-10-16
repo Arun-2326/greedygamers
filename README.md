@@ -32,21 +32,23 @@ Then visit `http://localhost:8000`.
 
 ---
 
-## Controls
+## Controls (Strictly Six Keys Only)
 
-| Key / Input | Action |
+In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using these six keyboard controls (No WASD, Escape, or extra keys):
+
+| Key | Action |
 |---|---|
-| **Up Arrow / W** | Move up (continuous movement while held) |
-| **Down Arrow / S** | Move down (continuous movement while held) |
-| **Left Arrow / A** | Move left (continuous movement while held) |
-| **Right Arrow / D** | Move right (continuous movement while held) |
+| **Up Arrow** | Move up (continuous movement while held) |
+| **Down Arrow** | Move down (continuous movement while held) |
+| **Left Arrow** | Move left (continuous movement while held) |
+| **Right Arrow** | Move right (continuous movement while held) |
 | **Z** | Confirm / Start Game / Pause & Resume Toggle / Restart |
-| **Space / Left Click** | Neon Surge Dash (2.2s cooldown, secondary dodge) |
+| **Space** | Neon Surge Dash (2.2s cooldown, secondary dodge, safe action) |
 
-- **Diagonals**: Holding two perpendicular directions simultaneously (e.g. `W + A` or `Up + Left`) moves and steers diagonally.
-- **Player Arrow**: An aerodynamic delta-wing cyber arrow with animated dual thruster plumes that rotates smoothly toward your movement heading.
+- **Diagonals**: Holding two perpendicular arrows simultaneously moves and steers diagonally.
+- **Speedy Cyber Arrow Flight**: High-speed propulsion (`315 px/s` cruising, `772 px/s` dash burst) with sharpened steering response.
 - **Pause & Resume**: Pressing **`Z`** during active gameplay pauses the game safely; pressing **`Z`** again resumes play. The game also automatically pauses if the browser window loses focus (`blur`).
-- **Higher Difficulty Post-Hit Cooldown**: Post-hit invulnerability recovery cooldown is tuned to 1.0s, demanding immediate evasive maneuvering when cornered by hunting drones.
+- **High-Tension Difficulty**: Post-hit recovery window tuned to 1.0s, requiring quick reflexive maneuvering to evade multi-hunter pincers.
 
 ---
 

@@ -70,11 +70,11 @@ class Game {
       angle: -Math.PI / 2,       // Facing upwards initially
       targetAngle: -Math.PI / 2,
       radius: 18,
-      speed: 250,
+      speed: 315, // Speedy, agile flight speed
       integrity: 5,
       maxIntegrity: 5,
       invulnTimer: 0,
-      invulnDuration: 1.0, // Harder difficulty: reduced from 2.4s to 1.0s recovery cooldown (Rule 3 compliant)
+      invulnDuration: 1.0, // Harder difficulty: reduced to 1.0s recovery cooldown (Rule 3 compliant)
       vx: 0,
       vy: 0,
       // Space Dash (AGENTS.md compliant: >=2s cooldown, safe secondary action)
@@ -429,12 +429,12 @@ class Game {
       let diff = this.player.targetAngle - this.player.angle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
-      this.player.angle += diff * Math.min(1, dt * 18);
+      this.player.angle += diff * Math.min(1, dt * 22);
 
       // Speed calculation (with dash boost if active)
       let currentSpeed = this.player.speed;
       if (this.player.dashActiveTimer > 0) {
-        currentSpeed = this.player.speed * 2.3;
+        currentSpeed = this.player.speed * 2.45;
       }
 
       this.player.prevX = this.player.x;
@@ -684,10 +684,10 @@ class Game {
   }
 
   _updateDrone(drone, dt, threatLevel) {
-    // Dynamic drone speed scaling based on threat level and score
-    const baseSpeeds = [115, 115, 132, 150, 168, 186];
-    const baseSpeed = baseSpeeds[threatLevel] || 115;
-    const scoreBonusSpeed = Math.min(45, (this.score / 700) * 3.5);
+    // Dynamic drone speed scaling based on threat level and score (High-speed arcade tuning)
+    const baseSpeeds = [135, 135, 155, 175, 195, 215];
+    const baseSpeed = baseSpeeds[threatLevel] || 135;
+    const scoreBonusSpeed = Math.min(60, (this.score / 600) * 4.0);
 
     const speedMult = this.empTimer > 0 ? 0.5 : 1.0;
     const finalSpeed = (baseSpeed + scoreBonusSpeed) * speedMult;
@@ -710,7 +710,7 @@ class Game {
 
     if (drone.state === 'MOVING' || drone.state === 'DASHING') {
       // Dash multiplier
-      const dashSpeedMult = drone.isDashing ? 2.35 : 1.0;
+      const dashSpeedMult = drone.isDashing ? 2.5 : 1.0;
       const currentMoveSpeed = finalSpeed * dashSpeedMult;
 
       if (drone.isDashing) {
@@ -1401,15 +1401,15 @@ class Game {
     ctx.fillStyle = '#00f0ff';
     ctx.fillText(`TIME: ${timeStr}`, 495, 27);
 
-    // 5. SPACE / CLICK DASH STATUS WITH KEY HINT
+    // 5. SPACE DASH STATUS WITH KEY HINT
     ctx.font = 'bold 13px "Segoe UI", Arial, sans-serif';
     if (this.player.dashCooldown <= 0) {
       ctx.fillStyle = '#00ffcc';
-      ctx.fillText('[SPACE / CLICK] DASH: READY', 605, 27);
+      ctx.fillText('[SPACE] DASH: READY', 615, 27);
     } else {
       ctx.fillStyle = '#64748b';
       const pct = Math.ceil(this.player.dashCooldown);
-      ctx.fillText(`[SPACE / CLICK] DASH: ${pct}s`, 605, 27);
+      ctx.fillText(`[SPACE] DASH: ${pct}s`, 615, 27);
     }
 
     // 6. PAUSE HINT
@@ -1472,9 +1472,9 @@ class Game {
     ctx.textAlign = 'left';
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('• Arrow Keys / WASD : Directional Movement', bx + 30, by + 35);
+    ctx.fillText('• Arrow Keys : Directional Movement', bx + 30, by + 35);
     ctx.fillText('• Z Key : Resume Gameplay', bx + 30, by + 70);
-    ctx.fillText('• Space / Left Click : Neon Surge Dash (2.2s cooldown)', bx + 30, by + 105);
+    ctx.fillText('• Space : Neon Surge Dash (2.2s cooldown)', bx + 30, by + 105);
 
     ctx.restore();
   }
@@ -1536,25 +1536,25 @@ class Game {
     ctx.textAlign = 'left';
     ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('MISSION CONTROLS (ARROWS / WASD + MOUSE):', boxX + 28, boxY + 36);
+    ctx.fillText('COMPETITION CONTROLS (STRICT SIX KEYS ONLY):', boxX + 28, boxY + 36);
 
-    // Visual Keycap Cluster 1: ARROWS / WASD
-    this._drawKeycap(ctx, boxX + 28, boxY + 58, 140, 34, '▲▼◀▶ / WASD', '#00f0ff');
+    // Visual Keycap Cluster 1: ARROW KEYS
+    this._drawKeycap(ctx, boxX + 28, boxY + 58, 120, 34, '▲ ▼ ◀ ▶', '#00f0ff');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Continuous Directional Movement (Held + Diagonals)', boxX + 180, boxY + 80);
+    ctx.fillText('Continuous Directional Movement (Held + Diagonals)', boxX + 160, boxY + 80);
 
     // Visual Keycap Cluster 2: Z KEY
-    this._drawKeycap(ctx, boxX + 28, boxY + 104, 140, 34, 'Z KEY', '#00ffcc');
+    this._drawKeycap(ctx, boxX + 28, boxY + 104, 120, 34, 'Z KEY', '#00ffcc');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Confirm / Start Game / Pause / Resume / Restart', boxX + 180, boxY + 126);
+    ctx.fillText('Confirm / Start Game / Pause / Resume / Restart', boxX + 160, boxY + 126);
 
-    // Visual Keycap Cluster 3: SPACE / CLICK
-    this._drawKeycap(ctx, boxX + 28, boxY + 150, 140, 34, 'SPACE / CLICK', '#ffea00');
+    // Visual Keycap Cluster 3: SPACE KEY
+    this._drawKeycap(ctx, boxX + 28, boxY + 150, 120, 34, 'SPACE', '#ffea00');
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#e0e0e0';
-    ctx.fillText('Neon Surge Dash (2.2s cooldown, secondary dodge)', boxX + 180, boxY + 172);
+    ctx.fillText('Neon Surge Dash (2.2s cooldown, secondary dodge)', boxX + 160, boxY + 172);
 
     // Feature note
     ctx.font = '14px "Courier New", monospace';

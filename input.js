@@ -1,10 +1,7 @@
-// input.js — Centralized Input Handler complying with AGENTS.md
-// Controls supported:
-// - Directional Movement: Arrow Keys (ArrowUp, ArrowDown, ArrowLeft, ArrowRight) & WASD (KeyW, KeyA, KeyS, KeyD)
-// - Primary Action / Start / Pause / Restart: Z / z (KeyZ)
-// - Secondary Action (Neon Surge Dash): Space & Mouse Left-Click
+// input.js — Centralized Input Handler complying strictly with AGENTS.md
+// ONLY allowed keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Z/z, Space.
 // Tracks continuous held state and detects fresh presses without OS key-repeat dependency.
-// Clears state on window blur.
+// Clears state on window blur. Never binds mouse, click, or touch events.
 
 class InputManager {
   constructor() {
@@ -17,20 +14,20 @@ class InputManager {
       space: false
     };
 
-    // Tracks if action was just triggered this frame (requires release before re-triggering)
+    // Tracks if key was just pressed this frame (requires release before re-triggering)
     this.justPressedZ = false;
     this.justPressedSpace = false;
 
-    // Internal trackers
-    this._keys = {};
-    this._mouseHeld = false;
+    // Internal tracker for key state transitions
+    this._prevZ = false;
+    this._prevSpace = false;
 
     this._bindEvents();
   }
 
   _bindEvents() {
     window.addEventListener('keydown', (e) => {
-      // Strictly prevent browser scrolling for movement and action keys
+      // Strictly prevent browser scrolling for arrows and space
       if (
         e.code === 'Space' ||
         e.key === ' ' ||
@@ -42,74 +39,46 @@ class InputManager {
         e.preventDefault();
       }
 
-      const key = e.key ? e.key.toLowerCase() : '';
-      const code = e.code || '';
+      const key = e.key;
+      const code = e.code;
 
-      const isUp = code === 'ArrowUp' || key === 'arrowup' || code === 'KeyW' || key === 'w';
-      const isDown = code === 'ArrowDown' || key === 'arrowdown' || code === 'KeyS' || key === 's';
-      const isLeft = code === 'ArrowLeft' || key === 'arrowleft' || code === 'KeyA' || key === 'a';
-      const isRight = code === 'ArrowRight' || key === 'arrowright' || code === 'KeyD' || key === 'd';
-      const isZ = code === 'KeyZ' || key === 'z';
-      const isSpace = code === 'Space' || key === ' ';
-
-      if (isUp) this._keys['up'] = true;
-      if (isDown) this._keys['down'] = true;
-      if (isLeft) this._keys['left'] = true;
-      if (isRight) this._keys['right'] = true;
-
-      if (isZ) {
+      if (key === 'ArrowUp' || code === 'ArrowUp') {
+        this.held.up = true;
+      } else if (key === 'ArrowDown' || code === 'ArrowDown') {
+        this.held.down = true;
+      } else if (key === 'ArrowLeft' || code === 'ArrowLeft') {
+        this.held.left = true;
+      } else if (key === 'ArrowRight' || code === 'ArrowRight') {
+        this.held.right = true;
+      } else if (key === 'z' || key === 'Z' || code === 'KeyZ') {
         if (!this.held.z) {
           this.justPressedZ = true;
         }
-        this._keys['z'] = true;
-      }
-
-      if (isSpace) {
-        if (!this.held.space && !this._mouseHeld) {
+        this.held.z = true;
+      } else if (key === ' ' || code === 'Space') {
+        if (!this.held.space) {
           this.justPressedSpace = true;
         }
-        this._keys['space'] = true;
-      }
-
-      this._syncHeldState();
-    });
-
-    window.addEventListener('keyup', (e) => {
-      const key = e.key ? e.key.toLowerCase() : '';
-      const code = e.code || '';
-
-      const isUp = code === 'ArrowUp' || key === 'arrowup' || code === 'KeyW' || key === 'w';
-      const isDown = code === 'ArrowDown' || key === 'arrowdown' || code === 'KeyS' || key === 's';
-      const isLeft = code === 'ArrowLeft' || key === 'arrowleft' || code === 'KeyA' || key === 'a';
-      const isRight = code === 'ArrowRight' || key === 'arrowright' || code === 'KeyD' || key === 'd';
-      const isZ = code === 'KeyZ' || key === 'z';
-      const isSpace = code === 'Space' || key === ' ';
-
-      if (isUp) this._keys['up'] = false;
-      if (isDown) this._keys['down'] = false;
-      if (isLeft) this._keys['left'] = false;
-      if (isRight) this._keys['right'] = false;
-      if (isZ) this._keys['z'] = false;
-      if (isSpace) this._keys['space'] = false;
-
-      this._syncHeldState();
-    });
-
-    // Mouse Left-Click dash support
-    window.addEventListener('mousedown', (e) => {
-      if (e.button === 0) { // Left-click
-        if (!this.held.space && !this._mouseHeld) {
-          this.justPressedSpace = true;
-        }
-        this._mouseHeld = true;
         this.held.space = true;
       }
     });
 
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) {
-        this._mouseHeld = false;
-        this.held.space = !!this._keys['space'];
+    window.addEventListener('keyup', (e) => {
+      const key = e.key;
+      const code = e.code;
+
+      if (key === 'ArrowUp' || code === 'ArrowUp') {
+        this.held.up = false;
+      } else if (key === 'ArrowDown' || code === 'ArrowDown') {
+        this.held.down = false;
+      } else if (key === 'ArrowLeft' || code === 'ArrowLeft') {
+        this.held.left = false;
+      } else if (key === 'ArrowRight' || code === 'ArrowRight') {
+        this.held.right = false;
+      } else if (key === 'z' || key === 'Z' || code === 'KeyZ') {
+        this.held.z = false;
+      } else if (key === ' ' || code === 'Space') {
+        this.held.space = false;
       }
     });
 
@@ -119,15 +88,6 @@ class InputManager {
     });
   }
 
-  _syncHeldState() {
-    this.held.up = !!this._keys['up'];
-    this.held.down = !!this._keys['down'];
-    this.held.left = !!this._keys['left'];
-    this.held.right = !!this._keys['right'];
-    this.held.z = !!this._keys['z'];
-    this.held.space = !!(this._keys['space'] || this._mouseHeld);
-  }
-
   // Consume fresh press for Z
   consumeZ() {
     const wasPressed = this.justPressedZ;
@@ -135,7 +95,7 @@ class InputManager {
     return wasPressed;
   }
 
-  // Consume fresh press for Dash (Space or Left-Click)
+  // Consume fresh press for Space
   consumeSpace() {
     const wasPressed = this.justPressedSpace;
     this.justPressedSpace = false;
@@ -150,8 +110,6 @@ class InputManager {
   }
 
   resetAll() {
-    this._keys = {};
-    this._mouseHeld = false;
     this.held.up = false;
     this.held.down = false;
     this.held.left = false;

@@ -8,21 +8,21 @@
 ## Why these rules exist
 At the demo, judges and guests who have never seen the game will play it on a shared demo setup. They react slower than the developers, they are not precise, and they may hold keys longer than expected. The game must be easy to pick up, forgiving, and fully playable with six keys.
 
-## Rule 1 — Allowed controls
-| Key / Input         | Meaning                                              |
-|---------------------|------------------------------------------------------|
-| Up Arrow / W        | Up / move up / menu up                               |
-| Down Arrow / S      | Down / move down / menu down                         |
-| Left Arrow / A      | Left / move left / menu left                         |
-| Right Arrow / D     | Right / move right / menu right                      |
-| Z                   | Primary action / confirm / start / restart / pause   |
-| Space / Left Click  | Secondary action (Neon Surge Dash)                  |
+## Rule 1 — Allowed controls (ONLY these six keys)
+| Key         | Meaning                                              |
+|-------------|------------------------------------------------------|
+| Up Arrow    | Up / move up / menu up                               |
+| Down Arrow  | Down / move down / menu down                         |
+| Left Arrow  | Left / move left / menu left                         |
+| Right Arrow | Right / move right / menu right                      |
+| Z           | Primary action / confirm / start / restart           |
+| Space       | Secondary action (e.g., jump, shoot, dash, special)  |
 
-- Directional movement supports both Arrow Keys and WASD.
-- Secondary dash supports both Space and Mouse Left-Click.
-- Accept both "z" and "Z" (Caps Lock on or off), and both lower/uppercase WASD.
-- Every screen (title, menus, pause, game over, restart) works with Z (and secondary keys where applicable).
-- Dash must never be needed more than about once every 2 seconds, and never needs to be held for long.
+- NO other keys: no Enter, Escape, Shift, Ctrl, Tab, numbers, other letters, or WASD.
+- NO mouse, touchpad, touch, gamepad or microphone input of any kind. No clickable buttons.
+- Accept both "z" and "Z" (Caps Lock on or off).
+- Every screen (title, menus, pause, game over, restart) must work with only these six keys. Start, confirm and restart always use Z.
+- Space is optional. If the game uses it, Space must never be needed more than about once every 2 seconds, and never needs to be held for long.
 - Opposite keys are never held together: no mechanic may need Up + Down or Left + Right at the same time.
 
 ## Rule 2 — Held keys must work
@@ -63,8 +63,8 @@ At the demo, judges and guests who have never seen the game will play it on a sh
 - Never commit secrets or API keys.
 
 ## Compliance Checklist (run after every change)
-- [ ] Arrow Keys and WASD provide continuous movement; Space and Left-Click trigger dash; Z handles confirm/start/pause/restart
-- [ ] Centralized input manager handles held state and fresh presses smoothly
+- [ ] Only Up/Down/Left/Right Arrows, Z and Space are used anywhere in the code
+- [ ] No mouse/touch/click handlers exist
 - [ ] Holding an arrow gives continuous movement; releasing stops it; no reliance on key-repeat
 - [ ] Z works for start, confirm and restart; both z and Z accepted
 - [ ] Screen changes need a fresh Z press; holding Z through game over does not restart instantly
