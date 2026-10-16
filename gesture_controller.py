@@ -119,11 +119,32 @@ class GestureBridge:
                 except Exception:
                     pass
 
-    def run(self, camera_index=0):
-        cap = cv2.VideoCapture(camera_index)
+    def run(self, camera_index=None):
+        # Auto-detect physical camera (Try index 1 first to prioritize HP True Vision over Motorola Virtual Camera)
+        cap = None
+        chosen_idx = None
+        candidates = [1, 0, 2, 3] if camera_index is None else [camera_index]
+
+        for idx in candidates:
+            temp_cap = cv2.VideoCapture(idx)
+            if temp_cap.isOpened():
+                ret, frame = temp_cap.read()
+                if ret and frame is not None:
+                    cap = temp_cap
+                    chosen_idx = idx
+                    print(f"[*] Connected successfully to physical webcam at index {idx} (HP True Vision)!")
+                    break
+                else:
+                    temp_cap.release()
+
+        if cap is None:
+            # Fallback to index 0 if detection fails
+            cap = cv2.VideoCapture(0)
+            chosen_idx = 0
+
         if not cap.isOpened():
-            print(f"\n[Error] Unable to open camera device at index {camera_index}.")
-            print("Please ensure your webcam is connected and accessible.\n")
+            print(f"\n[Error] Unable to open camera device at index {chosen_idx}.")
+            print("Please ensure your HP True Vision webcam is accessible in Windows Settings.\n")
             return
 
         print("\n" + "=" * 70)

@@ -56,16 +56,16 @@
       container.id = 'webcam-container';
       container.innerHTML = `
         <div id="webcam-header">
-          <div style="display:flex;align-items:center;">
+          <div style="display:flex;align-items:center;gap:6px;overflow:hidden;">
             <span id="webcam-status-dot"></span>
-            <span id="webcam-title">AI VISION GESTURE CAM</span>
+            <select id="webcam-select" title="Choose Camera"></select>
           </div>
           <button id="webcam-toggle-btn" title="Toggle Cam Size">_</button>
         </div>
         <div id="webcam-video-wrap">
           <video id="webcam-video" autoplay playsinline muted></video>
           <canvas id="webcam-canvas" width="320" height="240"></canvas>
-          <div id="webcam-hud-notice">INITIALIZING CAMERA...</div>
+          <div id="webcam-hud-notice">INITIALIZING HP TRUE VISION CAM...</div>
         </div>
         <div id="webcam-footer">
           <div id="webcam-metrics">
@@ -91,6 +91,7 @@
       this.metricMouth = document.getElementById('metric-mouth');
       this.metricBlink = document.getElementById('metric-blink');
       this.statusDot = document.getElementById('webcam-status-dot');
+      this.deviceSelect = document.getElementById('webcam-select');
 
       // Toggle minimize button
       const toggleBtn = document.getElementById('webcam-toggle-btn');
@@ -108,35 +109,116 @@
           throw new Error('getUserMedia not supported in this browser environment');
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 320 },
-            height: { ideal: 240 },
-            facingMode: 'user'
-          },
-          audio: false
-        });
+        // 1. Initial permission probe if labels are hidden
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        let videoDevices = devices.filter(d => d.kind === 'videoinput');
 
-        this.stream = stream;
-        this.video.srcObject = stream;
+        if (videoDevices.length > 0 && !videoDevices[0].label) {
+          try {
+            const probeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            probeStream.getTracks().forEach(t => t.stop());
+            devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter(d => d.kind === 'videoinput');
+          } catch (probeErr) {
+            console.warn('[Webcam] Probe notice:', probeErr);
+          }
+        }
 
-        this.video.addEventListener('loadedmetadata', () => {
-          this.canvas.width = this.video.videoWidth || 320;
-          this.canvas.height = this.video.videoHeight || 240;
-          this.isTracking = true;
-          this.hudNotice.style.display = 'none';
-          this.statusDot.style.backgroundColor = '#00ff88';
-          this.statusDot.style.boxShadow = '0 0 8px #00ff88';
+        // 2. Select HP True Vision camera as high priority
+        let chosenDeviceId = null;
+        const hpDevice = videoDevices.find(d => /hp|true\s*vision/i.test(d.label));
+        const nonVirtual = videoDevices.find(d => !/motorola|virtual/i.test(d.label));
 
-          // Start native CV loop immediately
-          requestAnimationFrame(() => this._cvLoop());
-        });
+        if (hpDevice) {
+          chosenDeviceId = hpDevice.deviceId;
+          console.log('[Webcam] Auto-selected HP True Vision Camera:', hpDevice.label);
+        } else if (nonVirtual) {
+          chosenDeviceId = nonVirtual.deviceId;
+          console.log('[Webcam] Selected physical non-virtual camera:', nonVirtual.label);
+        } else if (videoDevices.length > 1) {
+          chosenDeviceId = videoDevices[1].deviceId; // Index 1 is typically physical when 0 is virtual
+        } else if (videoDevices.length > 0) {
+          chosenDeviceId = videoDevices[0].deviceId;
+        }
+
+        // Populate camera dropdown
+        this._populateCameraDropdown(videoDevices, chosenDeviceId);
+
+        // 3. Connect to chosen camera
+        await this._connectStream(chosenDeviceId);
+
       } catch (err) {
         console.warn('Webcam initialization notice:', err);
         this.hudNotice.innerHTML = 'CAM ACCESS NEEDED<br><small style="font-size:9px">Click address bar icon to allow</small>';
         this.hudNotice.style.color = '#ffaa00';
         this.statusDot.style.backgroundColor = '#ffaa00';
       }
+    }
+
+    _populateCameraDropdown(videoDevices, selectedId) {
+      if (!this.deviceSelect) return;
+      this.deviceSelect.innerHTML = '';
+
+      if (videoDevices.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = 'No cameras found';
+        this.deviceSelect.appendChild(opt);
+        return;
+      }
+
+      videoDevices.forEach((dev, idx) => {
+        const opt = document.createElement('option');
+        opt.value = dev.deviceId;
+        opt.textContent = dev.label || `Camera ${idx + 1}`;
+        if (dev.deviceId === selectedId) {
+          opt.selected = true;
+        }
+        this.deviceSelect.appendChild(opt);
+      });
+
+      this.deviceSelect.onchange = async () => {
+        console.log('[Webcam] User manually switched to camera:', this.deviceSelect.value);
+        await this._connectStream(this.deviceSelect.value);
+      };
+    }
+
+    async _connectStream(deviceId) {
+      if (this.stream) {
+        this.stream.getTracks().forEach(t => t.stop());
+      }
+
+      this.hudNotice.style.display = 'flex';
+      this.hudNotice.textContent = 'CONNECTING CAMERA...';
+
+      const constraints = {
+        video: {
+          width: { ideal: 320 },
+          height: { ideal: 240 }
+        },
+        audio: false
+      };
+
+      if (deviceId) {
+        constraints.video.deviceId = { exact: deviceId };
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.stream = stream;
+      this.video.srcObject = stream;
+
+      this.video.onloadedmetadata = () => {
+        this.canvas.width = this.video.videoWidth || 320;
+        this.canvas.height = this.video.videoHeight || 240;
+        this.isTracking = true;
+        this.hudNotice.style.display = 'none';
+        this.statusDot.style.backgroundColor = '#00ff88';
+        this.statusDot.style.boxShadow = '0 0 8px #00ff88';
+
+        if (!this.cvLoopStarted) {
+          this.cvLoopStarted = true;
+          requestAnimationFrame(() => this._cvLoop());
+        }
+      };
     }
 
     _attemptLoadMediaPipe() {
