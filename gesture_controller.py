@@ -88,6 +88,11 @@ class GestureBridge:
         self.blink_threshold = 0.18
         self.steer_deadzone_x = 0.05
         self.steer_deadzone_y = 0.05
+        self.dz_x_min = 0.40
+        self.dz_x_max = 0.60
+        self.dz_y_min = 0.35
+        self.dz_y_max = 0.65
+        self.calib_start_time = None
         self.prev_mouth_open = False
         self.last_z_time = 0.0
         self.z_debounce = 0.45  # Cooldown between Z triggers
@@ -242,22 +247,36 @@ class GestureBridge:
                     cv2.circle(frame, (int((1.0 - lip_top.x) * w), int(lip_top.y * h)), 3, (0, 255, 255), -1)
                     cv2.circle(frame, (int((1.0 - lip_bottom.x) * w), int(lip_bottom.y * h)), 3, (0, 255, 255), -1)
 
-                    is_mouth_open = (mar >= self.mouth_open_threshold)
-
-                    # Holding mouth open holds Z
-                    if is_mouth_open:
-                        if not self.prev_mouth_open and (now - self.last_z_time) >= self.z_debounce:
-                            self._press_key('z')
-                            self.last_z_time = now
-                            action_text = ">> MOUTH OPEN -> Z KEY TRIGGERED! <<"
-                            action_color = (0, 255, 0)
-                        else:
-                            action_text = "MOUTH OPEN [Z HELD]"
-                            action_color = (0, 255, 128)
-                        self._set_held_state('z', True)
+                    # ---------------- Calibration Phase ----------------
+                    if self.is_calibrating:
+                        if self.calib_start_time is None:
+                            self.calib_start_time = now
+                        self.calib_samples.append({'mar': mar, 'ear': 0.30})
+                        pct = min(100, int((len(self.calib_samples) / self.calib_target) * 100))
+                        action_text = f"TRAINING ON FACE: {pct}%"
+                        action_color = (0, 255, 255)
+                        if len(self.calib_samples) >= self.calib_target or (now - self.calib_start_time) > 1.5:
+                            avg_mar = sum(s['mar'] for s in self.calib_samples) / len(self.calib_samples)
+                            self.mouth_open_threshold = max(0.18, avg_mar * 1.55 + 0.05)
+                            self.is_calibrating = False
+                            print(f"[AI Vision] Python face calibration complete! MAR threshold: {self.mouth_open_threshold:.3f}")
                     else:
-                        self._set_held_state('z', False)
-                    self.prev_mouth_open = is_mouth_open
+                        is_mouth_open = (mar >= self.mouth_open_threshold)
+
+                        # Holding mouth open holds Z
+                        if is_mouth_open:
+                            if not self.prev_mouth_open and (now - self.last_z_time) >= self.z_debounce:
+                                self._press_key('z')
+                                self.last_z_time = now
+                                action_text = ">> MOUTH OPEN -> Z KEY TRIGGERED! <<"
+                                action_color = (0, 255, 0)
+                            else:
+                                action_text = "MOUTH OPEN [Z HELD]"
+                                action_color = (0, 255, 128)
+                            self._set_held_state('z', True)
+                        else:
+                            self._set_held_state('z', False)
+                        self.prev_mouth_open = is_mouth_open
 
                     # ---------------- Eye Aspect Ratio (EAR) -> Space Dash ----------------
                     ear_left = math.hypot(flm[159].x - flm[145].x, flm[159].y - flm[145].y) / max(0.001, math.hypot(flm[33].x - flm[133].x, flm[33].y - flm[133].y))
