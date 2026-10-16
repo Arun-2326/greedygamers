@@ -1311,9 +1311,9 @@ class Game {
     ctx.textBaseline = 'middle';
 
     // 1. INTEGRITY SECTION
-    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#8bf0ff';
-    ctx.fillText('INTEGRITY:', 20, 27);
+    ctx.fillText('INTEGRITY:', 16, 27);
 
     for (let i = 0; i < this.player.maxIntegrity; i++) {
       if (i < this.player.integrity) {
@@ -1321,24 +1321,24 @@ class Game {
       } else {
         ctx.fillStyle = '#1c2838';
       }
-      const bx = 110 + i * 22;
-      ctx.fillRect(bx, 17, 18, 18);
+      const bx = 102 + i * 20;
+      ctx.fillRect(bx, 18, 16, 18);
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 1;
-      ctx.strokeRect(bx, 17, 18, 18);
+      ctx.strokeRect(bx, 18, 16, 18);
     }
 
     // 2. REPAIR COUNTER
-    ctx.font = 'bold 13px "Courier New", monospace';
+    ctx.font = 'bold 12px "Courier New", monospace';
     ctx.fillStyle = '#ffea00';
-    ctx.fillText(`REPAIR:`, 235, 27);
+    ctx.fillText(`REPAIR:`, 214, 27);
 
     for (let p = 0; p < 4; p++) {
       ctx.fillStyle = p < this.repairProgress ? '#ffea00' : '#232f3e';
-      ctx.fillRect(296 + p * 12, 19, 9, 14);
+      ctx.fillRect(270 + p * 11, 20, 8, 14);
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 1;
-      ctx.strokeRect(296 + p * 12, 19, 9, 14);
+      ctx.strokeRect(270 + p * 11, 20, 8, 14);
     }
 
     // 3. THREAT LEVEL BADGE (5 Threat Levels)
@@ -1354,35 +1354,40 @@ class Game {
     ];
     ctx.font = 'bold 13px "Courier New", monospace';
     ctx.fillStyle = threatColors[threat] || '#00ffcc';
-    ctx.fillText(threatLabels[threat], 365, 27);
+    ctx.fillText(threatLabels[threat], 328, 27);
 
     // 4. SURVIVAL TIME (Counts UP in Endless Mode)
     const mins = Math.floor(this.survivalTime / 60);
     const secs = Math.floor(this.survivalTime % 60);
     const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    ctx.font = 'bold 20px "Courier New", monospace';
+    ctx.font = 'bold 16px "Courier New", monospace';
     ctx.fillStyle = '#00f0ff';
-    ctx.fillText(`SURVIVED: ${timeStr}`, 550, 27);
+    ctx.fillText(`TIME: ${timeStr}`, 495, 27);
 
-    // 5. SPACE DASH STATUS
+    // 5. SPACE DASH STATUS WITH KEY HINT
     ctx.font = 'bold 13px "Segoe UI", Arial, sans-serif';
     if (this.player.dashCooldown <= 0) {
       ctx.fillStyle = '#00ffcc';
-      ctx.fillText('SPACE: READY', 715, 27);
+      ctx.fillText('[SPACE] DASH: READY', 615, 27);
     } else {
       ctx.fillStyle = '#64748b';
       const pct = Math.ceil(this.player.dashCooldown);
-      ctx.fillText(`SPACE: ${pct}s`, 715, 27);
+      ctx.fillText(`[SPACE] DASH: ${pct}s`, 615, 27);
     }
 
-    // 6. COMBO MULTIPLIER
+    // 6. PAUSE HINT
+    ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText('[Z] PAUSE', 785, 27);
+
+    // 7. COMBO MULTIPLIER
     if (this.combo > 1) {
       ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`x${this.combo}`, 820, 27);
+      ctx.fillText(`x${this.combo}`, 865, 27);
     }
 
-    // 7. SCORE & HIGH SCORE
+    // 8. SCORE & HIGH SCORE
     ctx.textAlign = 'right';
     ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
