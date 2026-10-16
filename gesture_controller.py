@@ -64,15 +64,35 @@ class GestureBridge:
             'right': False
         }
 
-        # Facial Expression Trackers
-        # Mouth Open (Z Key)
-        self.mouth_open_threshold = 0.38
+        # Facial Expression Trackers (Adaptive Baseline Training)
+        self.is_calibrating = True
+        self.calib_samples = []
+        self.calib_target = 40
+        self.baseline = {
+            'nose_x': 0.50,
+            'pitch': 0.50,
+            'yaw': 0.0,
+            'mar': 0.12,
+            'ear': 0.28
+        }
+        self.smooth = {
+            'nose_x': 0.50,
+            'pitch': 0.50,
+            'yaw': 0.0,
+            'mar': 0.12,
+            'ear': 0.28
+        }
+
+        # Dynamic Thresholds (Tuned to player's face)
+        self.mouth_open_threshold = 0.22
+        self.blink_threshold = 0.18
+        self.steer_deadzone_x = 0.05
+        self.steer_deadzone_y = 0.05
         self.prev_mouth_open = False
         self.last_z_time = 0.0
         self.z_debounce = 0.45  # Cooldown between Z triggers
 
         # Eye Blink (Space Dash)
-        self.blink_threshold = 0.20
         self.is_eye_closed = False
         self.eye_closed_start = 0.0
         self.last_dash_time = 0.0
@@ -81,12 +101,6 @@ class GestureBridge:
         # Hand Gesture Backups
         self.prev_fist_state = False
         self.prev_dash_state = False
-
-        # Deadzone configuration for Hand Steering (normalized 0.0 - 1.0)
-        self.dz_x_min = 0.38
-        self.dz_x_max = 0.62
-        self.dz_y_min = 0.38
-        self.dz_y_max = 0.62
 
     def _press_key(self, key_name):
         """Dispatches a single instantaneous key press."""

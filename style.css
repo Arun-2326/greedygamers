@@ -171,12 +171,47 @@ canvas {
   user-select: none;
 }
 
-#webcam-metrics {
+#webcam-recalib-btn {
+  background: transparent;
+  border: 1px solid rgba(0, 255, 136, 0.6);
+  color: #00ff88;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+#webcam-recalib-btn:hover {
+  background: rgba(0, 255, 136, 0.25);
+  box-shadow: 0 0 6px #00ff88;
+}
+
+.webcam-meter-row {
   display: flex;
-  justify-content: space-between;
-  color: #00f0ff;
+  align-items: center;
   font-family: "Courier New", monospace;
   font-size: 10px;
+  color: #00f0ff;
+  gap: 6px;
+}
+
+.webcam-meter-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.webcam-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  transition: width 0.08s ease;
 }
 
 #webcam-steer-indicators {
