@@ -6,9 +6,9 @@ class Game {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx = this.canvas.getContext('2d');
 
-    // Dynamic Full Screen Setup
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
+    // Dynamic Full Screen Setup with resilient defaults
+    this.width = window.innerWidth > 0 ? window.innerWidth : 960;
+    this.height = window.innerHeight > 0 ? window.innerHeight : 600;
     this.canvas.width = this.width;
     this.canvas.height = this.height;
 
@@ -1818,7 +1818,20 @@ class Game {
   }
 }
 
-// Instantiate game when window loads
-window.addEventListener('load', () => {
-  window.game = new Game();
-});
+// Robust game instantiation that works whether DOM is already loaded or still loading
+function initGame() {
+  if (!window.game) {
+    try {
+      window.game = new Game();
+    } catch (err) {
+      console.error('Failed to initialize Neon Core game:', err);
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initGame);
+  window.addEventListener('load', initGame);
+} else {
+  initGame();
+}

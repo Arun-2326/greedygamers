@@ -10,7 +10,6 @@ class AdaptiveAI {
     this.arenaHeight = arenaHeight;
     this.cols = cols;
     this.rows = rows;
-    this.resize(arenaWidth, arenaHeight, cols, rows, topOffset);
 
     this.sampleInterval = 0.4;
     this.sampleTimer = 0;
@@ -23,13 +22,15 @@ class AdaptiveAI {
     this.biasIntensity = 0;
     this.maxOffset = 64;
 
-    // AI Prediction & Multi-Sector Lockdown State
+    // AI Prediction & Multi-Sector Lockdown State - Initialize BEFORE resize()
     this.lockdowns = [];      // Array of active lockdown square objects
     this.lockdownTimer = 2.5; // Quick warmup before first prediction
     this.transitions = {};    // Markov transition table: 'col,row' -> { 'col,row': count }
     this.lastCellKey = null;
     this.prevPlayerX = arenaWidth / 2;
     this.prevPlayerY = arenaHeight / 2;
+
+    this.resize(arenaWidth, arenaHeight, cols, rows, topOffset);
   }
 
   resize(arenaWidth, arenaHeight, cols = 8, rows = 5, topOffset = 54) {
@@ -41,11 +42,13 @@ class AdaptiveAI {
     this.cellWidth = arenaWidth / cols;
     this.cellHeight = Math.max(10, (arenaHeight - topOffset) / rows);
 
-    for (const ld of this.lockdowns) {
-      ld.x = ld.col * this.cellWidth;
-      ld.y = this.topOffset + ld.row * this.cellHeight;
-      ld.width = this.cellWidth;
-      ld.height = this.cellHeight;
+    if (this.lockdowns && Array.isArray(this.lockdowns)) {
+      for (const ld of this.lockdowns) {
+        ld.x = ld.col * this.cellWidth;
+        ld.y = this.topOffset + ld.row * this.cellHeight;
+        ld.width = this.cellWidth;
+        ld.height = this.cellHeight;
+      }
     }
   }
 
