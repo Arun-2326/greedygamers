@@ -113,7 +113,7 @@ class Game {
     this.canvas.width = this.width;
     this.canvas.height = this.height;
 
-    this.ai.resize(this.width, this.height, 8, 5);
+    this.ai.resize(this.width, this.height, 8, 5, 54);
 
     // Keep player within new bounds
     const pad = 32;
@@ -468,8 +468,45 @@ class Game {
         this.player.invulnTimer -= dt;
       }
 
-      // AI updates (samples player every 0.5s)
-      this.ai.update(dt, this.player.x, this.player.y);
+      // AI updates (predicts player next-move and runs sector lockdowns)
+      this.ai.update(dt, this.player.x, this.player.y, currentThreat, this.player.angle);
+
+      // AI Sector Lockdown Hazard & Evade Collision
+      if (this.ai.lockdown) {
+        const ld = this.ai.lockdown;
+
+        // Evade Reward: player broke free of predicted square before lockdown closed
+        if (ld.evaded && !ld.rewardedEvade) {
+          ld.rewardedEvade = true;
+          this.score += 300;
+          this._addFloatingText('PREDICTION EVADED! +300', this.player.x, this.player.y - 32, '#00ffcc');
+          this.screenShake = 4;
+          if (window.sound) window.sound.playCloseCall();
+          this._createCollectEffect(this.player.x, this.player.y, '#00f0ff');
+        }
+
+        // Active Hazard Collision: player standing inside locked hazard square
+        if (ld.state === 'LOCKED' && this.player.invulnTimer <= 0 && this.player.dashActiveTimer <= 0) {
+          if (this.ai.isPlayerInSquare(this.player.x, this.player.y, ld)) {
+            this.player.integrity--;
+            this.player.invulnTimer = this.player.invulnDuration;
+            this.screenShake = 12;
+            this.combo = 1;
+
+            if (window.sound) window.sound.playHit();
+            this._createDamageEffect(this.player.x, this.player.y);
+            this._addFloatingText('-1 SECTOR HAZARD', this.player.x, this.player.y - 20, '#ff0055');
+
+            if (this.player.integrity <= 0) {
+              this.state = 'GAMEOVER';
+              this.screenShake = 0;
+              this.gameOverTimer = 0;
+              this._checkHighScore();
+              return;
+            }
+          }
+        }
+      }
 
       // Core Spawning
       this.coreSpawnTimer += dt;
@@ -1002,6 +1039,120 @@ class Game {
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 3;
     ctx.strokeRect(10, 56, this.width - 20, this.height - 66);
+
+    // Render AI Predictive Sector Lockdown Square
+    this._renderLockdownSquare(ctx);
+  }
+
+  _renderLockdownSquare(ctx) {
+    if (!this.ai || !this.ai.lockdown) return;
+    const ld = this.ai.lockdown;
+
+    ctx.save();
+
+    if (ld.state === 'TELEGRAPH') {
+      // 1. Telegraph Warning Phase (Rule 3: 1.25s advance notice)
+      const remaining = Math.max(0, ld.telegraphDuration - ld.timer).toFixed(1);
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 80);
+
+      // Flashing semi-transparent fill
+      ctx.fillStyle = `rgba(255, 0, 150, ${0.15 + pulse * 0.15})`;
+      ctx.fillRect(ld.x, ld.y, ld.width, ld.height);
+
+      // Animated high-visibility dashed neon boundary
+      ctx.strokeStyle = '#ff00aa';
+      ctx.lineWidth = 3.5;
+      ctx.setLineDash([14, 8]);
+      ctx.lineDashOffset = -performance.now() / 20;
+      ctx.strokeRect(ld.x + 3, ld.y + 3, ld.width - 6, ld.height - 6);
+      ctx.setLineDash([]);
+
+      // Corner target brackets
+      const bLen = Math.min(24, ld.width * 0.2);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 3;
+      // Top-left
+      ctx.beginPath(); ctx.moveTo(ld.x, ld.y + bLen); ctx.lineTo(ld.x, ld.y); ctx.lineTo(ld.x + bLen, ld.y); ctx.stroke();
+      // Top-right
+      ctx.beginPath(); ctx.moveTo(ld.x + ld.width - bLen, ld.y); ctx.lineTo(ld.x + ld.width, ld.y); ctx.lineTo(ld.x + ld.width, ld.y + bLen); ctx.stroke();
+      // Bottom-left
+      ctx.beginPath(); ctx.moveTo(ld.x, ld.y + ld.height - bLen); ctx.lineTo(ld.x, ld.y + ld.height); ctx.lineTo(ld.x + bLen, ld.y + ld.height); ctx.stroke();
+      // Bottom-right
+      ctx.beginPath(); ctx.moveTo(ld.x + ld.width - bLen, ld.y + ld.height); ctx.lineTo(ld.x + ld.width, ld.y + ld.height); ctx.lineTo(ld.x + ld.width, ld.y + ld.height - bLen); ctx.stroke();
+
+      // Rotating targeting crosshair at center
+      const cx = ld.x + ld.width / 2;
+      const cy = ld.y + ld.height / 2;
+      const rot = performance.now() / 250;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      ctx.strokeStyle = '#ff00aa';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 12, Math.sin(a) * 12);
+        ctx.lineTo(Math.cos(a) * 26, Math.sin(a) * 26);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Warning text banner
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 14px "Courier New", monospace';
+      ctx.fillStyle = '#ffff00';
+      ctx.fillText(`AI PREDICTION LOCK [${remaining}s]`, cx, cy + 32);
+
+    } else if (ld.state === 'LOCKED') {
+      // 2. Active Hazard Lockdown Phase
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 60);
+
+      // Energized crimson grid fill
+      ctx.fillStyle = `rgba(255, 23, 68, ${0.30 + pulse * 0.15})`;
+      ctx.fillRect(ld.x, ld.y, ld.width, ld.height);
+
+      // Solid intense red hazard boundary with inner glow
+      ctx.strokeStyle = '#ff1744';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(ld.x + 2, ld.y + 2, ld.width - 4, ld.height - 4);
+
+      // Electric laser grid lattice inside the square
+      ctx.strokeStyle = `rgba(255, 120, 0, ${0.5 + pulse * 0.4})`;
+      ctx.lineWidth = 1.5;
+      const steps = 4;
+      const stepW = ld.width / steps;
+      const stepH = ld.height / steps;
+      for (let i = 1; i < steps; i++) {
+        ctx.beginPath();
+        ctx.moveTo(ld.x + i * stepW, ld.y);
+        ctx.lineTo(ld.x + i * stepW, ld.y + ld.height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(ld.x, ld.y + i * stepH);
+        ctx.lineTo(ld.x + ld.width, ld.y + i * stepH);
+        ctx.stroke();
+      }
+
+      // Large bold hazard warning
+      const cx = ld.x + ld.width / 2;
+      const cy = ld.y + ld.height / 2;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 15px "Courier New", monospace';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 10;
+      ctx.fillText('[!! HAZARD LOCKDOWN !!]', cx, cy);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
   }
 
   _renderGameplay(ctx) {
@@ -1559,7 +1710,7 @@ class Game {
     // Feature note
     ctx.font = '14px "Courier New", monospace';
     ctx.fillStyle = '#94a3b8';
-    ctx.fillText('★ ENDLESS SURVIVAL ★ Curved Pursuit Dashes ★ 4 Seeker Drone Classes', boxX + 28, boxY + 215);
+    ctx.fillText('★ ENDLESS SURVIVAL ★ Predictive Sector Lockdown ★ 4 Seeker Drone Classes', boxX + 28, boxY + 215);
 
     // Blinking "Press Z to start" (Rule 4 requirement)
     if (Math.floor(performance.now() / 500) % 2 === 0) {

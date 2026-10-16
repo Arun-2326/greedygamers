@@ -60,18 +60,24 @@ In strict adherence to **AGENTS.md Rule 1**, the game is playable solely using t
    - **Current Position Hunters (`Scout Alpha` & `Viper Phantom`)**: Lock directly onto your current coordinates and curve inward in flanking arcs to flush you out.
    - **Predictive Intercept Hunters (`Hunter Omega` & `Titan Overlord`)**: Calculate your real-time heading and velocity vector to cut off your projected escape path ahead of time!
    - Together, they execute coordinated **Pincer Traps** designed to raise player heart rate!
-3. **Curved Pursuit Flanking Arcs**:
+3. **Predictive AI Sector Lockdown (Square Hazard Trap)**:
+   - The AI continuously trains on your movement velocity, vector projection, and sector transition habits.
+   - It forecasts your next square and locks on with a flashing **1.25s advance telegraph** (`AI PREDICTION LOCK [1.2s]`).
+   - The square snaps shut into an electrified **`[!! HAZARD LOCKDOWN !!]`** for 3.2 seconds.
+   - Breaking free of the predicted square before it locks down awards **`PREDICTION EVADED! +300`**!
+4. **Curved Pursuit Flanking Arcs**:
    - Drones calculate **Quadratic Bezier Arcs** that flank around the arena with 1.25s telegraphs before striking.
-4. **Hunter Speed Dashes**:
-   - Hunter drones telegraph an attack vector with rotating lock-on reticles (`CURRENT TARGET LOCKED` vs `PREDICTED ESCAPE LOCKED`), then surge forward at **2.4x speed** with crimson shockwaves!
-5. **Adrenaline Evasion Rewards**:
+5. **Hunter Speed Dashes**:
+   - Hunter drones telegraph an attack vector with rotating lock-on reticles (`CURRENT TARGET LOCKED` vs `PREDICTED ESCAPE LOCKED`), then surge forward at **2.5x speed** with crimson shockwaves!
+6. **Adrenaline Evasion Rewards**:
    - `DASH EVADED! +250`: Dodging a single charging hunter.
+   - `PREDICTION EVADED! +300`: Outsmarting and escaping the AI's predicted sector lockdown!
    - `PINCER EVADED! +400`: Slipping through the jaws of multiple converging hunters!
-6. **5 Escalating Threat Levels & 4 Enemy Classes**:
+7. **5 Escalating Threat Levels & 4 Enemy Classes**:
    - **Level 1 (0 – 800 pts)**: Scout Protocol (Perimeter loops + regional AI bias).
    - **Level 2 (800 – 1800 pts)**: Intercept Seekers (Curved predictive tracking).
    - **Level 3 (1800 – 3200 pts)**: Apex Predator (Continuous curved sweeps & hunter dashes).
    - **Level 4 (3200 – 5000 pts)**: Viper Squadron (`Viper Phantom` joins with rapid cross-cutting arcs).
    - **Level 5 (5000+ pts)**: Omega Matrix (`Titan Overlord` joins; all 4 drones execute multi-angle pursuit dashes).
-7. **Procedural Web Audio Heartbeat**:
-   - Accelerating synth pulse that matches the escalating threat level.
+8. **Procedural Web Audio Heartbeat & Audio Synthesizer**:
+   - Accelerating synth pulse matching threat level, plus dynamic warning chirps and lockdown impact slams.
