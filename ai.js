@@ -8,8 +8,7 @@ class AdaptiveAI {
     this.arenaHeight = arenaHeight;
     this.cols = cols;
     this.rows = rows;
-    this.cellWidth = arenaWidth / cols;
-    this.cellHeight = arenaHeight / rows;
+    this.resize(arenaWidth, arenaHeight, cols, rows);
 
     this.sampleInterval = 0.5; // seconds
     this.sampleTimer = 0;
@@ -21,6 +20,15 @@ class AdaptiveAI {
     this.dominantCenter = null;
     this.biasIntensity = 0; // 0 to 1 based on concentration
     this.maxOffset = 64; // Max waypoint displacement in pixels
+  }
+
+  resize(arenaWidth, arenaHeight, cols = 8, rows = 5) {
+    this.arenaWidth = arenaWidth;
+    this.arenaHeight = arenaHeight;
+    this.cols = cols;
+    this.rows = rows;
+    this.cellWidth = arenaWidth / cols;
+    this.cellHeight = arenaHeight / rows;
   }
 
   reset() {
